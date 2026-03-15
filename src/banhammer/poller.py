@@ -103,12 +103,12 @@ class Poller:
         # Try journalmatch (systemd journal)
         try:
             output = self._run("get", jail, "journalmatch")
-            # Extract the match filter
+            # Extract all match filter parts (e.g. _SYSTEMD_UNIT=postfix.service)
             match_parts = []
             for line in output.splitlines():
-                line = line.strip()
-                if line.startswith("_SYSTEMD_UNIT=") or line.startswith("_COMM="):
-                    match_parts.extend(line.split())
+                for token in line.strip().split():
+                    if "=" in token and not token.startswith("Current"):
+                        match_parts.append(token)
 
             if match_parts:
                 lines = self._grep_journal(match_parts, ip, max_lines)
@@ -131,9 +131,9 @@ class Poller:
 
     def _grep_journal(self, match_parts: list[str], ip: str, max_lines: int) -> list[str]:
         try:
-            cmd = ["journalctl", "--no-pager", "-n", "200", "--output", "short-iso"]
+            cmd = ["journalctl", "--no-pager", "-n", "500", "--output", "short-iso"]
             for part in match_parts:
-                if part == "+":
+                if part in ("+", "Current", "match", "filter:"):
                     continue
                 cmd.append(part)
             result = subprocess.run(
