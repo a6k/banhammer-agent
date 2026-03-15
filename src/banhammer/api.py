@@ -73,8 +73,10 @@ def create_app(
     server_id: str,
     api_key: str,
     poller=None,
+    path_prefix: str = "",
 ) -> FastAPI:
     app = FastAPI(title="BanHammer Agent", docs_url=None, redoc_url=None)
+    prefix = path_prefix.rstrip("/") if path_prefix else ""
     rate_limiter = RateLimiter(max_requests=10, window_seconds=1.0)
 
     def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -92,7 +94,7 @@ def create_app(
             )
         return await call_next(request)
 
-    @app.get("/api/v1/health")
+    @app.get(f"{prefix}/api/v1/health")
     async def health():
         return {
             "status": "ok",
@@ -100,7 +102,7 @@ def create_app(
             "hostname": socket.gethostname(),
         }
 
-    @app.get("/api/v1/status")
+    @app.get(f"{prefix}/api/v1/status")
     async def status(_=Depends(verify_api_key)):
         latest = db.get_latest_status()
         return {
@@ -110,7 +112,7 @@ def create_app(
             "jails": latest or {},
         }
 
-    @app.get("/api/v1/events")
+    @app.get(f"{prefix}/api/v1/events")
     async def events(
         limit: Annotated[int, Query(ge=1, le=500)] = 50,
         offset: Annotated[int, Query(ge=0)] = 0,
@@ -125,7 +127,7 @@ def create_app(
             "events": event_list,
         }
 
-    @app.get("/api/v1/stats")
+    @app.get(f"{prefix}/api/v1/stats")
     async def stats(_=Depends(verify_api_key)):
         now = time.time()
         return {
@@ -135,7 +137,7 @@ def create_app(
             "total_bans_7d": db.bans_since(now - 7 * 86400),
         }
 
-    @app.post("/api/v1/unban")
+    @app.post(f"{prefix}/api/v1/unban")
     async def unban(req: UnbanRequest, _=Depends(verify_api_key)):
         if poller is None:
             raise HTTPException(status_code=503, detail="Poller not available")

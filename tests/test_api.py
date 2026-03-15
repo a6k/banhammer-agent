@@ -189,3 +189,26 @@ class TestUnban:
                 headers=auth_headers(),
             )
             assert resp.status_code == 422, f"jail={jail!r} should be invalid"
+
+
+class TestPathPrefix:
+    def test_prefix_routes(self, db):
+        app = create_app(
+            db=db,
+            server_id="test",
+            api_key=API_KEY,
+            path_prefix="/x7k9m2",
+        )
+        client = TestClient(app)
+        # Prefixed route works
+        resp = client.get("/x7k9m2/api/v1/health")
+        assert resp.status_code == 200
+        # Unprefixed route returns 404
+        resp = client.get("/api/v1/health")
+        assert resp.status_code == 404
+
+    def test_empty_prefix_still_works(self, db):
+        app = create_app(db=db, server_id="test", api_key=API_KEY, path_prefix="")
+        client = TestClient(app)
+        resp = client.get("/api/v1/health")
+        assert resp.status_code == 200

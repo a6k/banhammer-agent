@@ -86,6 +86,7 @@ class Agent:
             server_id=self.server_id,
             api_key=self.config["api"]["api_key"],
             poller=self.poller,
+            path_prefix=self.config["api"].get("path_prefix", ""),
         )
 
         # Configure uvicorn
@@ -155,12 +156,14 @@ def cmd_init(args):
     data_dir.mkdir(parents=True, exist_ok=True)
 
     api_key = "bh_" + secrets.token_hex(16)
+    path_prefix = "/" + secrets.token_hex(6)
 
     config_content = textwrap.dedent(f"""\
         [api]
         bind = "127.0.0.1"
         port = 8443
         api_key = "{api_key}"
+        path_prefix = "{path_prefix}"
         # tls_cert = "/etc/banhammer/cert.pem"
         # tls_key = "/etc/banhammer/key.pem"
 
@@ -183,7 +186,8 @@ def cmd_init(args):
     print(f"Config written to {config_file}")
     print(f"Data directory: {data_dir}")
     print(f"API Key: {api_key}")
-    print(f"Agent API will be available at https://your-server:8443/")
+    print(f"Path prefix: {path_prefix}")
+    print(f"Agent API will be available at https://your-server{path_prefix}/api/v1/health")
     print("Start the agent with: banhammer-agent run")
 
 
