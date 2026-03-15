@@ -66,9 +66,82 @@ class Poller:
         jail_data = {}
         for jail in jails:
             status = self.get_jail_status(jail)
+            # Look up log context for each banned IP
+            ip_details = {}
+            for ip in status["banned_ips"]:
+                try:
+                    log_lines = self.lookup_ip(jail, ip, max_lines=5)
+                    ip_details[ip] = log_lines
+                except Exception:
+                    ip_details[ip] = []
+
             jail_data[jail] = {
                 "active_bans": status["active_bans"],
                 "total_bans": status["total_bans"],
                 "banned_ips": status["banned_ips"],
+                "ip_details": ip_details,
             }
         return jail_data
+
+    def lookup_ip(self, jail: str, ip: str, max_lines: int = 10) -> list[str]:
+        """Look up recent log entries for an IP in a jail's log source."""
+        lines = []
+
+        # Try logpath first (file-based logging)
+        try:
+            output = self._run("get", jail, "logpath")
+            for line in output.splitlines():
+                if line.startswith("`-"):
+                    log_path = line.split("`-")[1].strip()
+                    if log_path:
+                        lines = self._grep_file(log_path, ip, max_lines)
+                        if lines:
+                            return lines
+        except Exception:
+            pass
+
+        # Try journalmatch (systemd journal)
+        try:
+            output = self._run("get", jail, "journalmatch")
+            # Extract the match filter
+            match_parts = []
+            for line in output.splitlines():
+                line = line.strip()
+                if line.startswith("_SYSTEMD_UNIT=") or line.startswith("_COMM="):
+                    match_parts.extend(line.split())
+
+            if match_parts:
+                lines = self._grep_journal(match_parts, ip, max_lines)
+        except Exception:
+            pass
+
+        return lines
+
+    def _grep_file(self, path: str, ip: str, max_lines: int) -> list[str]:
+        try:
+            result = subprocess.run(
+                ["grep", "-i", ip, path],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.stdout:
+                return result.stdout.strip().splitlines()[-max_lines:]
+        except Exception:
+            pass
+        return []
+
+    def _grep_journal(self, match_parts: list[str], ip: str, max_lines: int) -> list[str]:
+        try:
+            cmd = ["journalctl", "--no-pager", "-n", "200", "--output", "short-iso"]
+            for part in match_parts:
+                if part == "+":
+                    continue
+                cmd.append(part)
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=10,
+            )
+            if result.stdout:
+                matching = [l for l in result.stdout.splitlines() if ip in l]
+                return matching[-max_lines:]
+        except Exception:
+            pass
+        return []
