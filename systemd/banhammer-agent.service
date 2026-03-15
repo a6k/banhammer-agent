@@ -1,0 +1,14 @@
+[Unit]
+Description=BanHammer Agent
+After=fail2ban.service
+
+[Service]
+ExecStart=/usr/local/bin/banhammer-agent run
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/banhammer
+
+[Install]
+WantedBy=multi-user.target

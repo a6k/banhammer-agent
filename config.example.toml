@@ -1,0 +1,20 @@
+[backend]
+url = "https://api.example.com/events"
+api_key = "bh_xxxxxxxxxxxxxxxx"
+# ca_bundle = "/etc/ssl/custom-ca.pem"
+
+[agent]
+# server_id = "my-server"    # Default: hostname
+poll_interval = 60
+heartbeat_interval = 300
+batch_size = 50
+retry_max = 5
+retry_backoff = 2
+
+[fail2ban]
+log_path = "/var/log/fail2ban.log"
+client_path = "/usr/bin/fail2ban-client"
+
+[storage]
+queue_db = "/var/lib/banhammer/queue.db"
+queue_max_events = 10000
