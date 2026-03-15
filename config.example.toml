@@ -1,20 +1,18 @@
-[backend]
-url = "https://api.example.com/events"
+[api]
+bind = "127.0.0.1"         # "0.0.0.0" for direct access (requires TLS)
+port = 8443
 api_key = "bh_xxxxxxxxxxxxxxxx"
-# ca_bundle = "/etc/ssl/custom-ca.pem"
+# tls_cert = "/etc/banhammer/cert.pem"
+# tls_key = "/etc/banhammer/key.pem"
 
 [agent]
-# server_id = "my-server"    # Default: hostname
+# server_id = "my-server"  # Default: hostname
 poll_interval = 60
-heartbeat_interval = 300
-batch_size = 50
-retry_max = 5
-retry_backoff = 2
 
 [fail2ban]
 log_path = "/var/log/fail2ban.log"
 client_path = "/usr/bin/fail2ban-client"
 
 [storage]
-queue_db = "/var/lib/banhammer/queue.db"
-queue_max_events = 10000
+db_path = "/var/lib/banhammer/banhammer.db"
+retention_days = 90
