@@ -34,31 +34,3 @@ class UnbanEvent:
             "ip": self.ip,
             "timestamp": self.timestamp.isoformat(),
         }
-
-
-@dataclass
-class StatusEvent:
-    server_id: str
-    timestamp: datetime
-    jails: dict
-
-    def to_dict(self) -> dict:
-        return {
-            "type": "status",
-            "server_id": self.server_id,
-            "timestamp": self.timestamp.isoformat(),
-            "jails": self.jails,
-        }
-
-
-@dataclass
-class HeartbeatEvent:
-    server_id: str
-    timestamp: datetime
-
-    def to_dict(self) -> dict:
-        return {
-            "type": "heartbeat",
-            "server_id": self.server_id,
-            "timestamp": self.timestamp.isoformat(),
-        }
