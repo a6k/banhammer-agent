@@ -4,13 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "banhammer-agent"
-version = "0.1.0"
-description = "Lightweight agent that monitors Fail2Ban and forwards events to the BanHammer backend"
+version = "0.2.0"
+description = "Lightweight agent that monitors Fail2Ban and serves a local API"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 dependencies = [
-    "requests>=2.28",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
     "tomli>=2.0; python_version < '3.11'",
 ]
 
@@ -18,6 +19,8 @@ dependencies = [
 dev = [
     "pytest>=7.0",
     "pytest-cov",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
 ]
 
 [project.scripts]
