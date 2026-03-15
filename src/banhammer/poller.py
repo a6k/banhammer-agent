@@ -69,5 +69,6 @@ class Poller:
             jail_data[jail] = {
                 "active_bans": status["active_bans"],
                 "total_bans": status["total_bans"],
+                "banned_ips": status["banned_ips"],
             }
         return jail_data
