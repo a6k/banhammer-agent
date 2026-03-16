@@ -1,5 +1,6 @@
 import ipaddress
 import logging
+import threading
 from typing import Optional
 
 logger = logging.getLogger("banhammer")
@@ -29,6 +30,7 @@ class GeoIPService:
             logger.info("GeoIP disabled: no GeoLite2 database and HTTP fallback not enabled")
         self._cache: dict[str, Optional[dict]] = {}
         self._max_cache = 10000
+        self._cache_lock = threading.Lock()
 
     def lookup(self, ip: str) -> dict | None:
         """Resolve IP to geo data. Returns None for private/invalid IPs or on failure."""
@@ -40,8 +42,9 @@ class GeoIPService:
         if addr.is_private or addr.is_reserved or addr.is_loopback:
             return None
 
-        if ip in self._cache:
-            return self._cache[ip]
+        with self._cache_lock:
+            if ip in self._cache:
+                return self._cache[ip]
 
         result = None
 
@@ -57,11 +60,12 @@ class GeoIPService:
             except Exception:
                 pass
 
-        # Evict oldest entries if cache is full
-        if len(self._cache) >= self._max_cache:
-            for key in list(self._cache.keys())[:1000]:
-                del self._cache[key]
-        self._cache[ip] = result
+        # Store in cache
+        with self._cache_lock:
+            if len(self._cache) >= self._max_cache:
+                for key in list(self._cache.keys())[:1000]:
+                    del self._cache[key]
+            self._cache[ip] = result
         return result
 
     def _lookup_geoip2(self, ip: str) -> dict | None:

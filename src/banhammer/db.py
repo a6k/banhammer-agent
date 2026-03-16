@@ -87,6 +87,9 @@ class EventDB:
         city=None,
     ):
         """Insert a ban event with an explicit created_at — for testing only."""
+        # Normalize timestamp format: replace +00:00 with Z for consistent SQLite strftime
+        if timestamp.endswith("+00:00"):
+            timestamp = timestamp[:-6] + "Z"
         with self._lock:
             with self._connect() as conn:
                 try:
@@ -112,6 +115,9 @@ class EventDB:
         country_name=None,
         city=None,
     ):
+        # Normalize timestamp format: replace +00:00 with Z for consistent SQLite strftime
+        if timestamp.endswith("+00:00"):
+            timestamp = timestamp[:-6] + "Z"
         with self._lock:
             with self._connect() as conn:
                 try:

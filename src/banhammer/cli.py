@@ -51,6 +51,9 @@ class Agent:
 
         # Tail log for new ban/unban events
         for event in self.tailer.poll():
+            # Skip events for whitelisted IPs
+            if self.db.whitelist_contains(event["ip"]):
+                continue
             geo = self.geo.lookup(event["ip"])
             geo_kwargs = {}
             if geo:
@@ -142,6 +145,7 @@ class Agent:
     def _shutdown(self, server):
         logger.info("Shutdown signal received")
         self.running = False
+        self.geo.close()
         server.should_exit = True
 
     def run(self):
@@ -231,7 +235,7 @@ def cmd_backfill(args):
     geo_config = config.get("geo", {})
     geo = GeoIPService(
         db_path=geo_config.get("geoip_db_path"),
-        allow_http_fallback=geo_config.get("allow_http_fallback", True),  # backfill explicitly opts in
+        allow_http_fallback=geo_config.get("allow_http_fallback", False),
     )
 
     # Fix 4: Process in batches to avoid OOM

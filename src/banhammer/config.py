@@ -138,6 +138,14 @@ def load_config(path: str) -> dict:
     if not any(real_parent.startswith(d.rstrip("/")) for d in allowed_db_dirs):
         logger.warning("storage.db_path is outside expected directory: %s", db_path)
 
+    # MED-2: Validate path_prefix format
+    path_prefix = config.get("api", {}).get("path_prefix", "")
+    if path_prefix and not re.match(r"^(/[a-zA-Z0-9_-]+)+$", path_prefix):
+        raise ValueError(
+            f"Invalid path_prefix: {path_prefix!r} — "
+            "must match /segment format (e.g. /abc123)"
+        )
+
     # Server ID defaults to hostname
     config["agent"].setdefault("server_id", socket.gethostname())
 

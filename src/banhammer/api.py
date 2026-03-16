@@ -1,3 +1,4 @@
+import asyncio
 import hmac
 import ipaddress
 import logging
@@ -142,6 +143,29 @@ class RateLimiter:
             return True
 
 
+def _do_bulk_unban(entries, poller_ref, client_path):
+    results = []
+    for entry in entries:
+        if poller_ref is None:
+            results.append({"ip": entry.ip, "jail": entry.jail,
+                            "success": False, "error": "poller not available"})
+            continue
+        try:
+            result = subprocess.run(
+                [client_path, "set", entry.jail, "unbanip", entry.ip],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode != 0:
+                results.append({"ip": entry.ip, "jail": entry.jail,
+                                "success": False, "error": "unban failed"})
+            else:
+                results.append({"ip": entry.ip, "jail": entry.jail, "success": True})
+        except Exception:
+            results.append({"ip": entry.ip, "jail": entry.jail,
+                            "success": False, "error": "command error"})
+    return results
+
+
 def create_app(
     db: EventDB,
     server_id: str,
@@ -250,19 +274,16 @@ def create_app(
         removed = db.whitelist_remove(ip)
         if not removed:
             raise HTTPException(status_code=404, detail=f"{ip} not in whitelist")
-        if poller is not None:
-            jails_data = db.get_latest_status() or {}
-            for jail in jails_data:
-                try:
-                    result = subprocess.run(
+        if poller:
+            try:
+                jails = poller.get_jail_list()
+                for jail in jails:
+                    subprocess.run(
                         [poller.client_path, "set", jail, "delignoreip", ip],
                         capture_output=True, text=True, timeout=10,
                     )
-                    if result.returncode != 0:
-                        logger.warning("delignoreip %s in %s failed: %s", ip, jail,
-                                       result.stderr.strip() or result.stdout.strip())
-                except Exception as exc:
-                    logger.warning("delignoreip %s in %s error: %s", ip, jail, exc)
+            except Exception:
+                logger.warning("Failed to remove whitelist from fail2ban for %s", ip)
         return {"status": "ok"}
 
     @app.get(f"{prefix}/api/v1/stats/countries")
@@ -279,25 +300,8 @@ def create_app(
 
     @app.post(f"{prefix}/api/v1/unban/bulk")
     async def unban_bulk(req: BulkUnbanRequest, _=Depends(verify_api_key)):
-        results = []
-        for entry in req.entries:
-            if poller is None:
-                results.append({"ip": entry.ip, "jail": entry.jail,
-                                "success": False, "error": "poller not available"})
-                continue
-            try:
-                result = subprocess.run(
-                    [poller.client_path, "set", entry.jail, "unbanip", entry.ip],
-                    capture_output=True, text=True, timeout=10,
-                )
-                if result.returncode != 0:
-                    results.append({"ip": entry.ip, "jail": entry.jail,
-                                    "success": False, "error": "unban failed"})
-                else:
-                    results.append({"ip": entry.ip, "jail": entry.jail, "success": True})
-            except Exception:
-                results.append({"ip": entry.ip, "jail": entry.jail,
-                                "success": False, "error": "command error"})
+        client_path = poller.client_path if poller else None
+        results = await asyncio.to_thread(_do_bulk_unban, req.entries, poller, client_path)
         return {"results": results}
 
     @app.post(f"{prefix}/api/v1/unban")
