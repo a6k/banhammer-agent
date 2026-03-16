@@ -13,6 +13,8 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
     "tomli>=2.0; python_version < '3.11'",
+    "geoip2>=4.8",
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]
