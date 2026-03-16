@@ -341,6 +341,50 @@ class TestBulkUnban:
         assert "success" in results[0]
 
 
+class TestIntegration:
+    """End-to-end test exercising all new endpoints together."""
+
+    def test_full_workflow(self, client, db):
+        db.insert_event("ban", "sshd", "1.1.1.1", "2026-03-15T10:00:00Z",
+                         country_code="CN", country_name="China", lat=39.9, lon=116.4)
+        db.insert_event("ban", "sshd", "2.2.2.2", "2026-03-15T11:00:00Z",
+                         country_code="RU", country_name="Russia", lat=55.7, lon=37.6)
+        db.insert_event("ban", "postfix", "1.1.1.1", "2026-03-15T12:00:00Z",
+                         country_code="CN", country_name="China", lat=39.9, lon=116.4)
+
+        h = auth_headers()
+
+        # Status has capabilities
+        status = client.get("/api/v1/status", headers=h).json()
+        assert "capabilities" in status
+
+        # Events have geo
+        events = client.get("/api/v1/events", headers=h).json()
+        assert events["events"][0]["country_code"] is not None
+
+        # Timeline has buckets
+        timeline = client.get("/api/v1/stats/timeline?period=24h", headers=h).json()
+        assert timeline["period"] == "24h"
+
+        # Countries aggregated
+        countries = client.get("/api/v1/stats/countries", headers=h).json()
+        assert countries["total_bans"] == 3
+        assert countries["countries"][0]["country_code"] == "CN"
+        assert countries["countries"][0]["ban_count"] == 2
+
+        # Stats have first_seen/last_seen
+        stats = client.get("/api/v1/stats", headers=h).json()
+        assert "first_seen" in stats["top_attackers"][0]
+
+        # Whitelist CRUD
+        client.post("/api/v1/whitelist", json={"ip": "1.1.1.1"}, headers=h)
+        wl = client.get("/api/v1/whitelist", headers=h).json()
+        assert "1.1.1.1" in wl["ips"]
+        client.delete("/api/v1/whitelist/1.1.1.1", headers=h)
+        wl = client.get("/api/v1/whitelist", headers=h).json()
+        assert "1.1.1.1" not in wl["ips"]
+
+
 class TestPathPrefix:
     def test_prefix_routes(self, db):
         app = create_app(
