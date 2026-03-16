@@ -220,6 +220,33 @@ def cmd_status(args):
     print(f"API: {bind}:{port}")
 
 
+def cmd_backfill(args):
+    """Backfill geo data for existing events missing geo info."""
+    config = load_config(args.config)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+    db_inst = EventDB(config["storage"]["db_path"])
+    geo_db_path = config.get("geo", {}).get("geoip_db_path")
+    geo = GeoIPService(db_path=geo_db_path)
+
+    rows = db_inst.get_events_missing_geo()
+    total = len(rows)
+    updated = 0
+    logger.info("Backfilling geo data for %d events", total)
+
+    for event_id, ip in rows:
+        result = geo.lookup(ip)
+        if result:
+            db_inst.update_event_geo(
+                event_id, lat=result["lat"], lon=result["lon"],
+                country_code=result["country_code"],
+                country_name=result["country_name"], city=result["city"],
+            )
+            updated += 1
+
+    logger.info("Backfill complete: %d/%d events enriched", updated, total)
+    print(f"Backfill complete: {updated}/{total} events enriched with geo data")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="banhammer-agent",
@@ -235,6 +262,7 @@ def main():
     subparsers.add_parser("run", help="Start monitoring + API server")
     subparsers.add_parser("init", help="Initialize configuration")
     subparsers.add_parser("status", help="Show agent status")
+    subparsers.add_parser("backfill-geo", help="Backfill geo data for existing events")
 
     args = parser.parse_args()
 
@@ -242,6 +270,7 @@ def main():
         "run": cmd_run,
         "init": cmd_init,
         "status": cmd_status,
+        "backfill-geo": cmd_backfill,
     }
     commands[args.command](args)
 
