@@ -121,6 +121,22 @@ class TestEvents:
         assert data["limit"] == 50
         assert data["offset"] == 0
 
+    def test_events_include_geo_fields(self, client, db):
+        db.insert_event("ban", "sshd", "1.2.3.4", "2026-03-15T12:00:00Z",
+                         lat=39.9, lon=116.4, country_code="CN",
+                         country_name="China", city="Beijing")
+        resp = client.get("/api/v1/events", headers=auth_headers())
+        event = resp.json()["events"][0]
+        assert event["lat"] == 39.9
+        assert event["country_code"] == "CN"
+
+    def test_events_geo_fields_nullable(self, client, db):
+        db.insert_event("ban", "sshd", "1.2.3.4", "2026-03-15T12:00:00Z")
+        resp = client.get("/api/v1/events", headers=auth_headers())
+        event = resp.json()["events"][0]
+        assert event["lat"] is None
+        assert event["country_code"] is None
+
 
 # --- /api/v1/stats ---
 
