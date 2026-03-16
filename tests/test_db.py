@@ -128,3 +128,44 @@ def test_db_size_bytes(db):
     db.insert_event("ban", "sshd", "1.2.3.4", "2026-03-15T12:00:00Z")
     size = db.size_bytes()
     assert size > 0
+
+
+# Task 1: Geo columns
+def test_insert_event_with_geo(db):
+    db.insert_event("ban", "sshd", "1.2.3.4", "2026-03-15T12:00:00Z",
+                     lat=39.9, lon=116.4, country_code="CN",
+                     country_name="China", city="Beijing")
+    events = db.get_events(limit=1, offset=0)
+    assert events[0]["lat"] == 39.9
+    assert events[0]["lon"] == 116.4
+    assert events[0]["country_code"] == "CN"
+    assert events[0]["country_name"] == "China"
+    assert events[0]["city"] == "Beijing"
+
+
+def test_insert_event_without_geo_returns_none(db):
+    db.insert_event("ban", "sshd", "1.2.3.4", "2026-03-15T12:00:00Z")
+    events = db.get_events(limit=1, offset=0)
+    assert events[0]["lat"] is None
+    assert events[0]["country_code"] is None
+
+
+def test_get_events_missing_geo(db):
+    db.insert_event("ban", "sshd", "1.1.1.1", "2026-03-15T10:00:00Z",
+                     country_code="CN", country_name="China")
+    db.insert_event("ban", "sshd", "2.2.2.2", "2026-03-15T10:01:00Z")
+    missing = db.get_events_missing_geo()
+    assert len(missing) == 1
+    assert missing[0][1] == "2.2.2.2"
+
+
+def test_update_event_geo(db):
+    db.insert_event("ban", "sshd", "1.1.1.1", "2026-03-15T10:00:00Z")
+    missing = db.get_events_missing_geo()
+    event_id = missing[0][0]
+    db.update_event_geo(event_id, lat=39.9, lon=116.4,
+                         country_code="CN", country_name="China", city="Beijing")
+    events = db.get_events(limit=1, offset=0)
+    assert events[0]["country_code"] == "CN"
+    assert events[0]["lat"] == 39.9
+    assert len(db.get_events_missing_geo()) == 0

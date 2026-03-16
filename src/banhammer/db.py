@@ -30,6 +30,11 @@ class EventDB:
                         ip TEXT NOT NULL,
                         timestamp TEXT NOT NULL,
                         created_at REAL NOT NULL,
+                        lat REAL,
+                        lon REAL,
+                        country_code TEXT,
+                        country_name TEXT,
+                        city TEXT,
                         UNIQUE(type, jail, ip, timestamp)
                     )"""
                 )
@@ -46,28 +51,69 @@ class EventDB:
                 conn.execute(
                     "CREATE INDEX IF NOT EXISTS idx_events_type ON ban_events(type)"
                 )
+                # Migration: add geo columns to existing DBs
+                existing_cols = {
+                    row[1]
+                    for row in conn.execute("PRAGMA table_info(ban_events)").fetchall()
+                }
+                for col, col_type in [
+                    ("lat", "REAL"),
+                    ("lon", "REAL"),
+                    ("country_code", "TEXT"),
+                    ("country_name", "TEXT"),
+                    ("city", "TEXT"),
+                ]:
+                    if col not in existing_cols:
+                        conn.execute(f"ALTER TABLE ban_events ADD COLUMN {col} {col_type}")
 
-    def _insert_with_timestamp(self, event_type: str, jail: str, ip: str, timestamp: str, created_at: float):
+    def _insert_with_timestamp(
+        self,
+        event_type: str,
+        jail: str,
+        ip: str,
+        timestamp: str,
+        created_at: float,
+        *,
+        lat=None,
+        lon=None,
+        country_code=None,
+        country_name=None,
+        city=None,
+    ):
         """Insert a ban event with an explicit created_at — for testing only."""
         with self._lock:
             with self._connect() as conn:
                 try:
                     conn.execute(
-                        "INSERT INTO ban_events (type, jail, ip, timestamp, created_at) "
-                        "VALUES (?, ?, ?, ?, ?)",
-                        (event_type, jail, ip, timestamp, created_at),
+                        "INSERT INTO ban_events "
+                        "(type, jail, ip, timestamp, created_at, lat, lon, country_code, country_name, city) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (event_type, jail, ip, timestamp, created_at, lat, lon, country_code, country_name, city),
                     )
                 except sqlite3.IntegrityError:
                     pass  # Duplicate event, skip
 
-    def insert_event(self, event_type: str, jail: str, ip: str, timestamp: str):
+    def insert_event(
+        self,
+        event_type: str,
+        jail: str,
+        ip: str,
+        timestamp: str,
+        *,
+        lat=None,
+        lon=None,
+        country_code=None,
+        country_name=None,
+        city=None,
+    ):
         with self._lock:
             with self._connect() as conn:
                 try:
                     conn.execute(
-                        "INSERT INTO ban_events (type, jail, ip, timestamp, created_at) "
-                        "VALUES (?, ?, ?, ?, ?)",
-                        (event_type, jail, ip, timestamp, time.time()),
+                        "INSERT INTO ban_events "
+                        "(type, jail, ip, timestamp, created_at, lat, lon, country_code, country_name, city) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (event_type, jail, ip, timestamp, time.time(), lat, lon, country_code, country_name, city),
                     )
                 except sqlite3.IntegrityError:
                     pass  # Duplicate event, skip
@@ -76,14 +122,54 @@ class EventDB:
         with self._lock:
             with self._connect() as conn:
                 rows = conn.execute(
-                    "SELECT id, type, jail, ip, timestamp FROM ban_events "
+                    "SELECT id, type, jail, ip, timestamp, lat, lon, country_code, country_name, city "
+                    "FROM ban_events "
                     "ORDER BY id DESC LIMIT ? OFFSET ?",
                     (limit, offset),
                 ).fetchall()
         return [
-            {"id": r[0], "type": r[1], "jail": r[2], "ip": r[3], "timestamp": r[4]}
+            {
+                "id": r[0],
+                "type": r[1],
+                "jail": r[2],
+                "ip": r[3],
+                "timestamp": r[4],
+                "lat": r[5],
+                "lon": r[6],
+                "country_code": r[7],
+                "country_name": r[8],
+                "city": r[9],
+            }
             for r in rows
         ]
+
+    def get_events_missing_geo(self) -> list[tuple[int, str]]:
+        """Return (id, ip) for events where country_code IS NULL."""
+        with self._lock:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    "SELECT id, ip FROM ban_events WHERE country_code IS NULL"
+                ).fetchall()
+        return [(r[0], r[1]) for r in rows]
+
+    def update_event_geo(
+        self,
+        event_id: int,
+        *,
+        lat,
+        lon,
+        country_code,
+        country_name,
+        city,
+    ):
+        """Update geo fields for one event."""
+        with self._lock:
+            with self._connect() as conn:
+                conn.execute(
+                    "UPDATE ban_events SET lat=?, lon=?, country_code=?, country_name=?, city=? "
+                    "WHERE id=?",
+                    (lat, lon, country_code, country_name, city, event_id),
+                )
 
     def count_events(self) -> int:
         with self._lock:
