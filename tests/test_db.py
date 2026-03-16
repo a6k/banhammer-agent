@@ -178,3 +178,19 @@ def test_top_attackers_includes_timestamps(db):
     attackers = db.top_attackers(limit=10)
     assert attackers[0]["first_seen"] == "2026-03-10T08:00:00Z"
     assert attackers[0]["last_seen"] == "2026-03-15T12:00:00Z"
+
+
+# Task 3: timeline_buckets
+def test_timeline_buckets_24h(db):
+    now = time.time()
+    db._insert_with_timestamp("ban", "sshd", "1.1.1.1", "2026-03-15T10:00:00Z", now - 3600)
+    db._insert_with_timestamp("ban", "sshd", "1.1.1.2", "2026-03-15T10:30:00Z", now - 3600)
+    db._insert_with_timestamp("ban", "postfix", "2.2.2.2", "2026-03-15T10:15:00Z", now - 3600)
+    db._insert_with_timestamp("ban", "sshd", "3.3.3.3", "2026-03-15T11:00:00Z", now - 100)
+    buckets = db.timeline_buckets(period="24h")
+    assert isinstance(buckets, list)
+    assert len(buckets) >= 1
+    bucket = buckets[0]
+    assert "timestamp" in bucket
+    assert "total" in bucket
+    assert "by_jail" in bucket

@@ -190,6 +190,30 @@ class EventDB:
             for r in rows
         ]
 
+    def timeline_buckets(self, period: str = "24h") -> list[dict]:
+        """Return ban counts grouped by hour and jail for the given period."""
+        hours_map = {"24h": 24, "7d": 168, "30d": 720}
+        hours = hours_map.get(period, 24)
+        cutoff = time.time() - hours * 3600
+        with self._lock:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    "SELECT strftime('%Y-%m-%dT%H:00:00Z', timestamp) as hour, jail, COUNT(*) as cnt "
+                    "FROM ban_events "
+                    "WHERE created_at >= ? "
+                    "GROUP BY hour, jail "
+                    "ORDER BY hour ASC",
+                    (cutoff,),
+                ).fetchall()
+        # Aggregate into buckets keyed by hour
+        buckets: dict[str, dict] = {}
+        for hour, jail, cnt in rows:
+            if hour not in buckets:
+                buckets[hour] = {"timestamp": hour, "total": 0, "by_jail": {}}
+            buckets[hour]["total"] += cnt
+            buckets[hour]["by_jail"][jail] = cnt
+        return list(buckets.values())
+
     def bans_by_jail(self) -> dict[str, int]:
         with self._lock:
             with self._connect() as conn:
