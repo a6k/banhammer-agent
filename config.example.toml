@@ -20,3 +20,7 @@ client_path = "/usr/bin/fail2ban-client"
 [storage]
 db_path = "/var/lib/banhammer/banhammer.db"
 retention_days = 90
+
+[geo]
+# Path to GeoLite2-City.mmdb (optional, enables geo-enrichment)
+# geoip_db_path = "/var/lib/banhammer/GeoLite2-City.mmdb"

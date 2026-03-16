@@ -16,6 +16,7 @@ import uvicorn
 from banhammer.api import create_app
 from banhammer.config import load_config
 from banhammer.db import EventDB
+from banhammer.geo import GeoIPService
 from banhammer.log_tailer import LogTailer
 from banhammer.models import BanEvent
 from banhammer.poller import Poller
@@ -34,6 +35,8 @@ class Agent:
         self.db = EventDB(config["storage"]["db_path"])
         self.tailer = LogTailer(config["fail2ban"]["log_path"])
         self.poller = Poller(config["fail2ban"]["client_path"])
+        geo_db_path = config.get("geo", {}).get("geoip_db_path")
+        self.geo = GeoIPService(db_path=geo_db_path)
         self.server_id = config["agent"]["server_id"]
         self._last_poll = 0.0
         self._last_heartbeat = 0.0
@@ -45,11 +48,21 @@ class Agent:
 
         # Tail log for new ban/unban events
         for event in self.tailer.poll():
+            geo = self.geo.lookup(event["ip"])
+            geo_kwargs = {}
+            if geo:
+                geo_kwargs = {
+                    "lat": geo["lat"], "lon": geo["lon"],
+                    "country_code": geo["country_code"],
+                    "country_name": geo["country_name"],
+                    "city": geo["city"],
+                }
             self.db.insert_event(
                 event_type=event["type"],
                 jail=event["jail"],
                 ip=event["ip"],
                 timestamp=event["timestamp"].isoformat(),
+                **geo_kwargs,
             )
 
         # Poll fail2ban-client periodically
