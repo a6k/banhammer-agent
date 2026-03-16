@@ -3,6 +3,8 @@ Description=BanHammer Agent
 After=fail2ban.service
 
 [Service]
+User=banhammer
+Group=banhammer
 ExecStart=/opt/banhammer-agent/.venv/bin/banhammer-agent run
 Restart=on-failure
 RestartSec=5
@@ -10,10 +12,10 @@ NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
-ReadWritePaths=/var/lib/banhammer
+ReadWritePaths=/var/lib/banhammer /etc/banhammer
 LockPersonality=yes
 RestrictSUIDSGID=yes
-CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 
 [Install]
