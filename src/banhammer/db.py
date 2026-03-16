@@ -46,6 +46,12 @@ class EventDB:
                     )"""
                 )
                 conn.execute(
+                    """CREATE TABLE IF NOT EXISTS whitelist (
+                        ip TEXT PRIMARY KEY,
+                        created_at REAL NOT NULL
+                    )"""
+                )
+                conn.execute(
                     "CREATE INDEX IF NOT EXISTS idx_events_created_at ON ban_events(created_at)"
                 )
                 conn.execute(
@@ -281,3 +287,39 @@ class EventDB:
     def size_bytes(self) -> int:
         p = Path(self.db_path)
         return p.stat().st_size if p.exists() else 0
+
+    # --- Whitelist ---
+
+    def whitelist_add(self, ip: str):
+        """Add an IP to the whitelist (idempotent)."""
+        with self._lock:
+            with self._connect() as conn:
+                conn.execute(
+                    "INSERT OR IGNORE INTO whitelist (ip, created_at) VALUES (?, ?)",
+                    (ip, time.time()),
+                )
+
+    def whitelist_remove(self, ip: str) -> bool:
+        """Remove an IP from the whitelist. Returns True if it existed."""
+        with self._lock:
+            with self._connect() as conn:
+                cursor = conn.execute("DELETE FROM whitelist WHERE ip = ?", (ip,))
+                return cursor.rowcount > 0
+
+    def whitelist_list(self) -> list[str]:
+        """Return all whitelisted IPs ordered by creation time (newest first)."""
+        with self._lock:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    "SELECT ip FROM whitelist ORDER BY created_at DESC"
+                ).fetchall()
+        return [r[0] for r in rows]
+
+    def whitelist_contains(self, ip: str) -> bool:
+        """Check if an IP is in the whitelist."""
+        with self._lock:
+            with self._connect() as conn:
+                row = conn.execute(
+                    "SELECT 1 FROM whitelist WHERE ip = ?", (ip,)
+                ).fetchone()
+        return row is not None

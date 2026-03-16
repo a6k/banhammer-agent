@@ -218,3 +218,37 @@ def test_countries_stats_excludes_null_geo(db):
     result = db.countries_stats()
     assert result["total_bans"] == 1
     assert len(result["countries"]) == 1
+
+
+# Task 5: Whitelist
+def test_whitelist_add_and_list(db):
+    db.whitelist_add("1.2.3.4")
+    db.whitelist_add("5.6.7.8")
+    ips = db.whitelist_list()
+    assert "1.2.3.4" in ips
+    assert "5.6.7.8" in ips
+
+
+def test_whitelist_add_idempotent(db):
+    db.whitelist_add("1.2.3.4")
+    db.whitelist_add("1.2.3.4")
+    ips = db.whitelist_list()
+    assert ips.count("1.2.3.4") == 1
+
+
+def test_whitelist_remove(db):
+    db.whitelist_add("1.2.3.4")
+    removed = db.whitelist_remove("1.2.3.4")
+    assert removed is True
+    assert "1.2.3.4" not in db.whitelist_list()
+
+
+def test_whitelist_remove_nonexistent(db):
+    removed = db.whitelist_remove("9.9.9.9")
+    assert removed is False
+
+
+def test_whitelist_contains(db):
+    db.whitelist_add("1.2.3.4")
+    assert db.whitelist_contains("1.2.3.4") is True
+    assert db.whitelist_contains("9.9.9.9") is False
