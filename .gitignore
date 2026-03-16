@@ -6,3 +6,10 @@ dist/
 build/
 *.db
 docs/
+.pytest_cache/
+.ruff_cache/
+*.log
+*.pem
+*.key
+.env
+.DS_Store
