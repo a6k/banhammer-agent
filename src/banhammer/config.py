@@ -96,12 +96,29 @@ def load_config(path: str) -> dict:
                 "Set api.tls_cert and api.tls_key, or use a loopback bind address behind a reverse proxy."
             )
 
+    if tls_cert and tls_key:
+        if not os.path.isfile(tls_cert):
+            raise ValueError(f"api.tls_cert file not found: {tls_cert}")
+        if not os.path.isfile(tls_key):
+            raise ValueError(f"api.tls_key file not found: {tls_key}")
+        key_stat = os.stat(tls_key)
+        if key_stat.st_mode & (stat.S_IRGRP | stat.S_IROTH):
+            logger.warning("TLS key file %s is readable by group/others — consider chmod 600", tls_key)
+
     # CRIT-1: Validate client_path is absolute and exists
     client_path = config["fail2ban"]["client_path"]
     if not os.path.isabs(client_path):
         raise ValueError(f"fail2ban.client_path must be absolute: {client_path}")
     if not os.path.isfile(client_path):
         logger.warning("fail2ban.client_path does not exist: %s", client_path)
+
+    # MEDIUM-4: Validate log_path is absolute and under /var/log/
+    log_path = config["fail2ban"]["log_path"]
+    if not os.path.isabs(log_path):
+        raise ValueError(f"fail2ban.log_path must be absolute: {log_path}")
+    real_log_path = os.path.realpath(log_path) if os.path.exists(log_path) else log_path
+    if not real_log_path.startswith("/var/log/"):
+        logger.warning("fail2ban.log_path is outside /var/log/: %s", log_path)
 
     # CRIT-1: Verify config file permissions (warn if too open)
     try:

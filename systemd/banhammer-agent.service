@@ -3,12 +3,16 @@ Description=BanHammer Agent
 After=fail2ban.service
 
 [Service]
-ExecStart=/usr/local/bin/banhammer-agent run
+ExecStart=/opt/banhammer-agent/.venv/bin/banhammer-agent run
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=yes
 ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
 ReadWritePaths=/var/lib/banhammer
+LockPersonality=yes
+RestrictSUIDSGID=yes
 
 [Install]
 WantedBy=multi-user.target

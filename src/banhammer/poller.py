@@ -81,11 +81,12 @@ class Poller:
     def poll(self) -> dict:
         jails = self.get_jail_list()
         jail_data = {}
+        MAX_LOOKUP_IPS = 20
         for jail in jails:
             status = self.get_jail_status(jail)
             # Look up log context for each banned IP
             ip_details = {}
-            for ip in status["banned_ips"]:
+            for ip in status["banned_ips"][:MAX_LOOKUP_IPS]:
                 try:
                     log_lines = self.lookup_ip(jail, ip, max_lines=5)
                     ip_details[ip] = log_lines
@@ -170,7 +171,7 @@ class Poller:
 
     def _grep_journal(self, match_parts: list[str], ip: str, max_lines: int) -> list[str]:
         try:
-            cmd = ["journalctl", "--no-pager", "-n", "500", "--output", "short-iso"]
+            cmd = ["journalctl", "--no-pager", "-n", "500", "--output", "short-iso", "--"]
             for part in match_parts:
                 cmd.append(part)
             result = subprocess.run(

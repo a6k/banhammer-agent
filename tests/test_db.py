@@ -83,10 +83,7 @@ def test_bans_by_jail(db):
 def test_bans_since(db):
     now = time.time()
     # Insert event with created_at in the past (2 days ago)
-    db._EventDB__execute(
-        "INSERT INTO ban_events (type, jail, ip, timestamp, created_at) VALUES (?, ?, ?, ?, ?)",
-        ("ban", "sshd", "1.1.1.1", "2026-03-13T12:00:00Z", now - 2 * 86400),
-    )
+    db._insert_with_timestamp("ban", "sshd", "1.1.1.1", "2026-03-13T12:00:00Z", now - 2 * 86400)
     # Insert event with created_at now
     db.insert_event("ban", "sshd", "2.2.2.2", "2026-03-15T12:00:00Z")
     count_24h = db.bans_since(now - 86400)
@@ -98,10 +95,7 @@ def test_bans_since(db):
 def test_prune_old_events(db):
     now = time.time()
     # Insert old event (100 days ago)
-    db._EventDB__execute(
-        "INSERT INTO ban_events (type, jail, ip, timestamp, created_at) VALUES (?, ?, ?, ?, ?)",
-        ("ban", "sshd", "1.1.1.1", "2025-12-01T12:00:00Z", now - 100 * 86400),
-    )
+    db._insert_with_timestamp("ban", "sshd", "1.1.1.1", "2025-12-01T12:00:00Z", now - 100 * 86400)
     # Insert recent event
     db.insert_event("ban", "sshd", "2.2.2.2", "2026-03-15T12:00:00Z")
     db.prune(retention_days=90)

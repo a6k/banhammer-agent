@@ -47,11 +47,18 @@ class EventDB:
                     "CREATE INDEX IF NOT EXISTS idx_events_type ON ban_events(type)"
                 )
 
-    def __execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
-        """Low-level execute for tests and internal use."""
+    def _insert_with_timestamp(self, event_type: str, jail: str, ip: str, timestamp: str, created_at: float):
+        """Insert a ban event with an explicit created_at — for testing only."""
         with self._lock:
             with self._connect() as conn:
-                return conn.execute(sql, params)
+                try:
+                    conn.execute(
+                        "INSERT INTO ban_events (type, jail, ip, timestamp, created_at) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (event_type, jail, ip, timestamp, created_at),
+                    )
+                except sqlite3.IntegrityError:
+                    pass  # Duplicate event, skip
 
     def insert_event(self, event_type: str, jail: str, ip: str, timestamp: str):
         with self._lock:

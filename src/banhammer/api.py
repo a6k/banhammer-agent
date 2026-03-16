@@ -27,7 +27,7 @@ def _get_version() -> str:
     try:
         return pkg_version("banhammer-agent")
     except Exception:
-        return "0.2.0"
+        return "unknown"
 
 
 def _get_client_ip(request: Request) -> str:
@@ -72,10 +72,19 @@ class RateLimiter:
         self.window = window_seconds
         self._requests: dict[str, list[float]] = {}
         self._lock = threading.Lock()
+        self._check_count = 0
 
     def check(self, client_ip: str) -> bool:
         with self._lock:
             now = time.time()
+            self._check_count += 1
+
+            # Periodic cleanup every 100 checks
+            if self._check_count % 100 == 0:
+                stale = [k for k, v in self._requests.items() if not v or now - v[-1] >= self.window]
+                for k in stale:
+                    del self._requests[k]
+
             window = self._requests.get(client_ip, [])
             window = [t for t in window if now - t < self.window]
             if len(window) >= self.max_requests:
@@ -83,10 +92,6 @@ class RateLimiter:
                 return False
             window.append(now)
             self._requests[client_ip] = window
-            if len(self._requests) > 1000:
-                stale = [k for k, v in self._requests.items() if not v or now - v[-1] >= self.window]
-                for k in stale:
-                    del self._requests[k]
             return True
 
 
