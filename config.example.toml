@@ -22,5 +22,8 @@ db_path = "/var/lib/banhammer/banhammer.db"
 retention_days = 90
 
 [geo]
-# Path to GeoLite2-City.mmdb (optional, enables geo-enrichment)
+# Path to GeoLite2-City.mmdb (recommended for secure offline lookups)
 # geoip_db_path = "/var/lib/banhammer/GeoLite2-City.mmdb"
+# SECURITY WARNING: HTTP fallback sends banned IPs in plaintext to ip-api.com
+# Only enable if you accept the risk or have no GeoLite2 database
+# allow_http_fallback = false

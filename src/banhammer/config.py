@@ -42,6 +42,7 @@ def _is_loopback(bind: str) -> bool:
 
 
 def load_config(path: str) -> dict:
+    path = os.path.realpath(path)
     with open(path, "rb") as f:
         config = tomllib.load(f)
 

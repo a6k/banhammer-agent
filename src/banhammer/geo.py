@@ -8,8 +8,9 @@ logger = logging.getLogger("banhammer")
 class GeoIPService:
     """IP geolocation with GeoLite2 (primary) and ip-api.com (fallback)."""
 
-    def __init__(self, db_path: str | None = None):
+    def __init__(self, db_path: str | None = None, allow_http_fallback: bool = False):
         self._reader = None
+        self._allow_http_fallback = allow_http_fallback
         if db_path:
             try:
                 import geoip2.database
@@ -17,6 +18,15 @@ class GeoIPService:
                 logger.info("GeoLite2 database loaded: %s", db_path)
             except Exception as e:
                 logger.warning("GeoLite2 database not available: %s", e)
+        if not self._reader and self._allow_http_fallback:
+            logger.warning(
+                "SECURITY: No GeoLite2 database configured. "
+                "Using ip-api.com over plaintext HTTP as fallback. "
+                "Banned IPs will be sent unencrypted to a third party. "
+                "Configure [geo] geoip_db_path for secure offline lookups."
+            )
+        elif not self._reader:
+            logger.info("GeoIP disabled: no GeoLite2 database and HTTP fallback not enabled")
         self._cache: dict[str, Optional[dict]] = {}
         self._max_cache = 10000
 
@@ -41,7 +51,7 @@ class GeoIPService:
             except Exception:
                 pass
 
-        if result is None:
+        if result is None and self._allow_http_fallback:
             try:
                 result = self._lookup_api(ip)
             except Exception:

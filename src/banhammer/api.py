@@ -12,7 +12,7 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from banhammer.db import EventDB
 
@@ -65,7 +65,7 @@ class BulkUnbanEntry(BaseModel):
 
 
 class BulkUnbanRequest(BaseModel):
-    entries: list[BulkUnbanEntry]
+    entries: list[BulkUnbanEntry] = Field(..., max_length=100)
 
 
 class WhitelistRequest(BaseModel):

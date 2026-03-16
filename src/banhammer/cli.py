@@ -35,8 +35,11 @@ class Agent:
         self.db = EventDB(config["storage"]["db_path"])
         self.tailer = LogTailer(config["fail2ban"]["log_path"])
         self.poller = Poller(config["fail2ban"]["client_path"])
-        geo_db_path = config.get("geo", {}).get("geoip_db_path")
-        self.geo = GeoIPService(db_path=geo_db_path)
+        geo_config = config.get("geo", {})
+        self.geo = GeoIPService(
+            db_path=geo_config.get("geoip_db_path"),
+            allow_http_fallback=geo_config.get("allow_http_fallback", False),
+        )
         self.server_id = config["agent"]["server_id"]
         self._last_poll = 0.0
         self._last_heartbeat = 0.0
@@ -225,23 +228,31 @@ def cmd_backfill(args):
     config = load_config(args.config)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     db_inst = EventDB(config["storage"]["db_path"])
-    geo_db_path = config.get("geo", {}).get("geoip_db_path")
-    geo = GeoIPService(db_path=geo_db_path)
+    geo_config = config.get("geo", {})
+    geo = GeoIPService(
+        db_path=geo_config.get("geoip_db_path"),
+        allow_http_fallback=geo_config.get("allow_http_fallback", True),  # backfill explicitly opts in
+    )
 
-    rows = db_inst.get_events_missing_geo()
-    total = len(rows)
+    # Fix 4: Process in batches to avoid OOM
+    BATCH = 500
+    total = 0
     updated = 0
-    logger.info("Backfilling geo data for %d events", total)
-
-    for event_id, ip in rows:
-        result = geo.lookup(ip)
-        if result:
-            db_inst.update_event_geo(
-                event_id, lat=result["lat"], lon=result["lon"],
-                country_code=result["country_code"],
-                country_name=result["country_name"], city=result["city"],
-            )
-            updated += 1
+    while True:
+        rows = db_inst.get_events_missing_geo(limit=BATCH)
+        if not rows:
+            break
+        total += len(rows)
+        logger.info("Processing batch of %d events (%d total so far)", len(rows), total)
+        for event_id, ip in rows:
+            result = geo.lookup(ip)
+            if result:
+                db_inst.update_event_geo(
+                    event_id, lat=result["lat"], lon=result["lon"],
+                    country_code=result["country_code"],
+                    country_name=result["country_name"], city=result["city"],
+                )
+                updated += 1
 
     logger.info("Backfill complete: %d/%d events enriched", updated, total)
     print(f"Backfill complete: {updated}/{total} events enriched with geo data")

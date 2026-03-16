@@ -62,14 +62,14 @@ class EventDB:
                     row[1]
                     for row in conn.execute("PRAGMA table_info(ban_events)").fetchall()
                 }
-                for col, col_type in [
-                    ("lat", "REAL"),
-                    ("lon", "REAL"),
-                    ("country_code", "TEXT"),
-                    ("country_name", "TEXT"),
-                    ("city", "TEXT"),
-                ]:
+                _ALLOWED_MIGRATION_COLS = {
+                    "lat": "REAL", "lon": "REAL",
+                    "country_code": "TEXT", "country_name": "TEXT", "city": "TEXT",
+                }
+                for col, col_type in _ALLOWED_MIGRATION_COLS.items():
                     if col not in existing_cols:
+                        assert col in _ALLOWED_MIGRATION_COLS and col_type == _ALLOWED_MIGRATION_COLS[col], \
+                            f"Unexpected migration column: {col} {col_type}"
                         conn.execute(f"ALTER TABLE ban_events ADD COLUMN {col} {col_type}")
 
     def _insert_with_timestamp(
@@ -149,12 +149,13 @@ class EventDB:
             for r in rows
         ]
 
-    def get_events_missing_geo(self) -> list[tuple[int, str]]:
-        """Return (id, ip) for events where country_code IS NULL."""
+    def get_events_missing_geo(self, limit: int = 500) -> list[tuple[int, str]]:
+        """Return (id, ip) for events where country_code IS NULL, in batches."""
         with self._lock:
             with self._connect() as conn:
                 rows = conn.execute(
-                    "SELECT id, ip FROM ban_events WHERE country_code IS NULL"
+                    "SELECT id, ip FROM ban_events WHERE country_code IS NULL LIMIT ?",
+                    (limit,),
                 ).fetchall()
         return [(r[0], r[1]) for r in rows]
 
