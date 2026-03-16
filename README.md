@@ -19,7 +19,9 @@ Lightweight server agent that monitors Fail2Ban activity and serves a local REST
 ### 1. Install
 
 ```bash
-pip install banhammer-agent
+git clone https://github.com/a6k/banhammer-agent.git
+cd banhammer-agent
+pip install -e .
 ```
 
 ### 2. Initialize
@@ -53,7 +55,7 @@ The agent serves a REST API on port 8443 (configurable). All endpoints are prefi
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/{prefix}/api/v1/health` | No | Version and hostname |
+| GET | `/{prefix}/api/v1/health` | No | Status check |
 | GET | `/{prefix}/api/v1/status` | API-Key | Jail status with active bans, IPs, log context |
 | GET | `/{prefix}/api/v1/events` | API-Key | Ban/unban events (paginated) |
 | GET | `/{prefix}/api/v1/stats` | API-Key | Top attackers, bans by jail |
