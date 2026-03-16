@@ -169,3 +169,12 @@ def test_update_event_geo(db):
     assert events[0]["country_code"] == "CN"
     assert events[0]["lat"] == 39.9
     assert len(db.get_events_missing_geo()) == 0
+
+
+# Task 2: top_attackers with first_seen/last_seen
+def test_top_attackers_includes_timestamps(db):
+    db.insert_event("ban", "sshd", "1.2.3.4", "2026-03-10T08:00:00Z")
+    db.insert_event("ban", "sshd", "1.2.3.4", "2026-03-15T12:00:00Z")
+    attackers = db.top_attackers(limit=10)
+    assert attackers[0]["first_seen"] == "2026-03-10T08:00:00Z"
+    assert attackers[0]["last_seen"] == "2026-03-15T12:00:00Z"

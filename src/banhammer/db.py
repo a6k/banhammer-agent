@@ -180,11 +180,15 @@ class EventDB:
         with self._lock:
             with self._connect() as conn:
                 rows = conn.execute(
-                    "SELECT ip, COUNT(*) as ban_count FROM ban_events "
+                    "SELECT ip, COUNT(*) as ban_count, MIN(timestamp) as first_seen, MAX(timestamp) as last_seen "
+                    "FROM ban_events "
                     "WHERE type = 'ban' GROUP BY ip ORDER BY ban_count DESC LIMIT ?",
                     (limit,),
                 ).fetchall()
-        return [{"ip": r[0], "ban_count": r[1]} for r in rows]
+        return [
+            {"ip": r[0], "ban_count": r[1], "first_seen": r[2], "last_seen": r[3]}
+            for r in rows
+        ]
 
     def bans_by_jail(self) -> dict[str, int]:
         with self._lock:
