@@ -146,6 +146,7 @@ def create_app(
             "version": _get_version(),
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "jails": latest or {},
+            "capabilities": ["geo", "timeline", "countries", "whitelist", "bulk_unban"],
         }
 
     @app.get(f"{prefix}/api/v1/events")

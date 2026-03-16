@@ -77,6 +77,17 @@ class TestStatus:
         assert resp.status_code == 200
         assert resp.json()["jails"] == {}
 
+    def test_status_includes_capabilities(self, client):
+        resp = client.get("/api/v1/status", headers=auth_headers())
+        data = resp.json()
+        assert "capabilities" in data
+        caps = data["capabilities"]
+        assert "geo" in caps
+        assert "timeline" in caps
+        assert "countries" in caps
+        assert "whitelist" in caps
+        assert "bulk_unban" in caps
+
 
 # --- /api/v1/events ---
 
