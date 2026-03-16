@@ -143,6 +143,32 @@ class TestStats:
         assert data["bans_by_jail"]["sshd"] == 2
 
 
+# --- /api/v1/stats/timeline ---
+
+class TestTimeline:
+    def test_timeline_requires_auth(self, client):
+        resp = client.get("/api/v1/stats/timeline")
+        assert resp.status_code == 401
+
+    def test_timeline_default_period(self, client, db):
+        db.insert_event("ban", "sshd", "1.2.3.4", "2026-03-15T12:00:00Z")
+        resp = client.get("/api/v1/stats/timeline", headers=auth_headers())
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["period"] == "24h"
+        assert "buckets" in data
+
+    def test_timeline_7d_period(self, client, db):
+        db.insert_event("ban", "sshd", "1.2.3.4", "2026-03-15T12:00:00Z")
+        resp = client.get("/api/v1/stats/timeline?period=7d", headers=auth_headers())
+        assert resp.status_code == 200
+        assert resp.json()["period"] == "7d"
+
+    def test_timeline_invalid_period(self, client):
+        resp = client.get("/api/v1/stats/timeline?period=1y", headers=auth_headers())
+        assert resp.status_code == 422
+
+
 # --- /api/v1/unban ---
 
 class TestUnban:

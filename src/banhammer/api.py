@@ -174,6 +174,14 @@ def create_app(
             "total_bans_7d": db.bans_since(now - 7 * 86400),
         }
 
+    @app.get(f"{prefix}/api/v1/stats/timeline")
+    async def timeline(
+        period: Annotated[str, Query(pattern="^(24h|7d|30d)$")] = "24h",
+        _=Depends(verify_api_key),
+    ):
+        buckets = db.timeline_buckets(period=period)
+        return {"period": period, "buckets": buckets}
+
     @app.post(f"{prefix}/api/v1/unban")
     async def unban(req: UnbanRequest, _=Depends(verify_api_key)):
         if poller is None:
