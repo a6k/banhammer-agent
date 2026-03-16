@@ -13,3 +13,5 @@ docs/
 *.key
 .env
 .DS_Store
+config.toml
+!config.example.toml

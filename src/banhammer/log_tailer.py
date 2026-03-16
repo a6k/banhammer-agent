@@ -1,4 +1,3 @@
-import hashlib
 import ipaddress
 import os
 import re

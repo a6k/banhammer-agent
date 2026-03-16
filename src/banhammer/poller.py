@@ -5,7 +5,9 @@ import subprocess
 
 ALLOWED_LOG_DIRS = ("/var/log/",)
 
-JOURNAL_MATCH_RE = re.compile(r"^_[A-Z_]+=[\w@./:+.-]+$")
+JAIL_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+JOURNAL_MATCH_RE = re.compile(r"^_[A-Z_]+=[A-Za-z0-9@._-]+$")
 
 
 def parse_status_output(output: str) -> list[str]:
@@ -14,7 +16,7 @@ def parse_status_output(output: str) -> list[str]:
             jail_str = line.split("Jail list:")[1].strip()
             if not jail_str:
                 return []
-            return [j.strip() for j in jail_str.split(",")]
+            return [j.strip() for j in jail_str.split(",") if JAIL_RE.match(j.strip())]
     return []
 
 
@@ -170,8 +172,6 @@ class Poller:
         try:
             cmd = ["journalctl", "--no-pager", "-n", "500", "--output", "short-iso"]
             for part in match_parts:
-                if part in ("+", "Current", "match", "filter:"):
-                    continue
                 cmd.append(part)
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=10,

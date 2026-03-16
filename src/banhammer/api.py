@@ -4,6 +4,7 @@ import logging
 import re
 import socket
 import subprocess
+import threading
 import time
 from importlib.metadata import version as pkg_version
 from typing import Annotated
@@ -30,10 +31,15 @@ def _get_version() -> str:
 
 
 def _get_client_ip(request: Request) -> str:
-    """HIGH-1: Use X-Real-IP when behind a reverse proxy on loopback."""
+    """Use X-Real-IP when behind a reverse proxy on loopback, validated."""
     peer = request.client.host if request.client else "unknown"
     if peer in ("127.0.0.1", "::1"):
-        return request.headers.get("X-Real-IP") or peer
+        raw = request.headers.get("X-Real-IP", "")
+        try:
+            ipaddress.ip_address(raw)
+            return raw
+        except ValueError:
+            return peer
     return peer
 
 
@@ -65,28 +71,23 @@ class RateLimiter:
         self.max_requests = max_requests
         self.window = window_seconds
         self._requests: dict[str, list[float]] = {}
+        self._lock = threading.Lock()
 
     def check(self, client_ip: str) -> bool:
-        now = time.time()
-        if client_ip not in self._requests:
-            self._requests[client_ip] = []
-        # Prune old entries for this IP
-        self._requests[client_ip] = [
-            t for t in self._requests[client_ip] if now - t < self.window
-        ]
-        # MED-1: Delete empty keys and prune stale entries
-        if not self._requests[client_ip]:
-            del self._requests[client_ip]
-            # Periodic full cleanup when dict grows large
+        with self._lock:
+            now = time.time()
+            window = self._requests.get(client_ip, [])
+            window = [t for t in window if now - t < self.window]
+            if len(window) >= self.max_requests:
+                self._requests[client_ip] = window
+                return False
+            window.append(now)
+            self._requests[client_ip] = window
             if len(self._requests) > 1000:
                 stale = [k for k, v in self._requests.items() if not v or now - v[-1] >= self.window]
                 for k in stale:
                     del self._requests[k]
-            return True  # was empty, so not rate limited
-        if len(self._requests[client_ip]) >= self.max_requests:
-            return False
-        self._requests[client_ip].append(now)
-        return True
+            return True
 
 
 def create_app(
@@ -136,7 +137,7 @@ def create_app(
     @app.get(f"{prefix}/api/v1/events")
     async def events(
         limit: Annotated[int, Query(ge=1, le=500)] = 50,
-        offset: Annotated[int, Query(ge=0)] = 0,
+        offset: Annotated[int, Query(ge=0, le=1_000_000)] = 0,
         _=Depends(verify_api_key),
     ):
         total = db.count_events()
