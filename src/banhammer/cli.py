@@ -109,6 +109,7 @@ class Agent:
             api_key=self.config["api"]["api_key"],
             poller=self.poller,
             path_prefix=self.config["api"].get("path_prefix", ""),
+            geo_service=self.geo,
         )
 
         # Configure uvicorn

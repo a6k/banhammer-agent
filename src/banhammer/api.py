@@ -172,9 +172,24 @@ def create_app(
     api_key: str,
     poller=None,
     path_prefix: str = "",
+    geo_service=None,
 ) -> FastAPI:
     app = FastAPI(title="BanHammer Agent", docs_url=None, redoc_url=None)
     prefix = path_prefix.rstrip("/") if path_prefix else ""
+
+    # Resolve server's own location once at startup
+    _server_location: dict | None = None
+    if geo_service:
+        try:
+            # Get public IP via external service
+            import httpx as _httpx
+            resp = _httpx.get("https://api.ipify.org", timeout=5.0)
+            public_ip = resp.text.strip()
+            _server_location = geo_service.lookup(public_ip)
+            if _server_location:
+                logger.info("Server location resolved: %s (%s)", public_ip, _server_location.get("city"))
+        except Exception:
+            logger.debug("Could not resolve server location")
     rate_limiter = RateLimiter(max_requests=10, window_seconds=1.0)
 
     def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -202,7 +217,7 @@ def create_app(
     @app.get(f"{prefix}/api/v1/status")
     async def status(_=Depends(verify_api_key)):
         latest = db.get_latest_status()
-        return {
+        result = {
             "server_id": server_id,
             "hostname": socket.gethostname(),
             "version": _get_version(),
@@ -210,6 +225,10 @@ def create_app(
             "jails": latest or {},
             "capabilities": ["geo", "timeline", "countries", "whitelist", "bulk_unban"],
         }
+        if _server_location:
+            result["server_lat"] = _server_location["lat"]
+            result["server_lon"] = _server_location["lon"]
+        return result
 
     @app.get(f"{prefix}/api/v1/events")
     async def events(
