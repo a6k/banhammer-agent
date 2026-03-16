@@ -231,6 +231,24 @@ class EventDB:
                     (since_timestamp,),
                 ).fetchone()[0]
 
+    def countries_stats(self) -> dict:
+        """Return ban counts grouped by country (geo-resolved events only)."""
+        with self._lock:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    "SELECT country_code, country_name, COUNT(*) as ban_count "
+                    "FROM ban_events "
+                    "WHERE type = 'ban' AND country_code IS NOT NULL "
+                    "GROUP BY country_code, country_name "
+                    "ORDER BY ban_count DESC"
+                ).fetchall()
+        countries = [
+            {"country_code": r[0], "country_name": r[1], "ban_count": r[2]}
+            for r in rows
+        ]
+        total_bans = sum(c["ban_count"] for c in countries)
+        return {"total_bans": total_bans, "countries": countries}
+
     def prune(self, retention_days: int):
         cutoff = time.time() - (retention_days * 86400)
         with self._lock:

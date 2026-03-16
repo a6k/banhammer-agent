@@ -194,3 +194,27 @@ def test_timeline_buckets_24h(db):
     assert "timestamp" in bucket
     assert "total" in bucket
     assert "by_jail" in bucket
+
+
+# Task 4: countries_stats
+def test_countries_stats(db):
+    db.insert_event("ban", "sshd", "1.1.1.1", "2026-03-15T10:00:00Z",
+                     country_code="CN", country_name="China")
+    db.insert_event("ban", "sshd", "1.1.1.2", "2026-03-15T10:01:00Z",
+                     country_code="CN", country_name="China")
+    db.insert_event("ban", "sshd", "2.2.2.2", "2026-03-15T10:02:00Z",
+                     country_code="RU", country_name="Russia")
+    result = db.countries_stats()
+    assert result["total_bans"] == 3
+    assert result["countries"][0]["country_code"] == "CN"
+    assert result["countries"][0]["ban_count"] == 2
+    assert result["countries"][1]["country_code"] == "RU"
+
+
+def test_countries_stats_excludes_null_geo(db):
+    db.insert_event("ban", "sshd", "1.1.1.1", "2026-03-15T10:00:00Z",
+                     country_code="CN", country_name="China")
+    db.insert_event("ban", "sshd", "2.2.2.2", "2026-03-15T10:01:00Z")
+    result = db.countries_stats()
+    assert result["total_bans"] == 1
+    assert len(result["countries"]) == 1
