@@ -43,6 +43,31 @@ def _get_client_ip(request: Request) -> str:
     return peer
 
 
+class BulkUnbanEntry(BaseModel):
+    ip: str
+    jail: str
+
+    @field_validator("ip")
+    @classmethod
+    def validate_ip(cls, v: str) -> str:
+        try:
+            ipaddress.ip_address(v)
+        except ValueError:
+            raise ValueError(f"Invalid IP address: {v}")
+        return v
+
+    @field_validator("jail")
+    @classmethod
+    def validate_jail(cls, v: str) -> str:
+        if not v or not JAIL_RE.match(v):
+            raise ValueError(f"Invalid jail name: {v!r}")
+        return v
+
+
+class BulkUnbanRequest(BaseModel):
+    entries: list[BulkUnbanEntry]
+
+
 class WhitelistRequest(BaseModel):
     ip: str
 
@@ -254,6 +279,29 @@ def create_app(
     ):
         buckets = db.timeline_buckets(period=period)
         return {"period": period, "buckets": buckets}
+
+    @app.post(f"{prefix}/api/v1/unban/bulk")
+    async def unban_bulk(req: BulkUnbanRequest, _=Depends(verify_api_key)):
+        results = []
+        for entry in req.entries:
+            if poller is None:
+                results.append({"ip": entry.ip, "jail": entry.jail,
+                                "success": False, "error": "poller not available"})
+                continue
+            try:
+                result = subprocess.run(
+                    [poller.client_path, "set", entry.jail, "unbanip", entry.ip],
+                    capture_output=True, text=True, timeout=10,
+                )
+                if result.returncode != 0:
+                    results.append({"ip": entry.ip, "jail": entry.jail,
+                                    "success": False, "error": "unban failed"})
+                else:
+                    results.append({"ip": entry.ip, "jail": entry.jail, "success": True})
+            except Exception:
+                results.append({"ip": entry.ip, "jail": entry.jail,
+                                "success": False, "error": "command error"})
+        return {"results": results}
 
     @app.post(f"{prefix}/api/v1/unban")
     async def unban(req: UnbanRequest, _=Depends(verify_api_key)):

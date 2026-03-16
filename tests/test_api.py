@@ -291,6 +291,40 @@ class TestUnban:
             assert resp.status_code == 422, f"jail={jail!r} should be invalid"
 
 
+# --- /api/v1/unban/bulk ---
+
+class TestBulkUnban:
+    def test_bulk_unban_requires_auth(self, client):
+        resp = client.post("/api/v1/unban/bulk", json={"entries": []})
+        assert resp.status_code == 401
+
+    def test_bulk_unban_validates_entries(self, client):
+        resp = client.post("/api/v1/unban/bulk",
+                           json={"entries": [{"ip": "not-an-ip", "jail": "sshd"}]},
+                           headers=auth_headers())
+        assert resp.status_code == 422
+
+    def test_bulk_unban_empty_entries(self, client):
+        resp = client.post("/api/v1/unban/bulk",
+                           json={"entries": []},
+                           headers=auth_headers())
+        assert resp.status_code == 200
+        assert resp.json()["results"] == []
+
+    def test_bulk_unban_returns_per_ip_results(self, client):
+        resp = client.post("/api/v1/unban/bulk",
+                           json={"entries": [
+                               {"ip": "1.2.3.4", "jail": "sshd"},
+                               {"ip": "5.6.7.8", "jail": "postfix"},
+                           ]},
+                           headers=auth_headers())
+        assert resp.status_code == 200
+        results = resp.json()["results"]
+        assert len(results) == 2
+        assert results[0]["ip"] == "1.2.3.4"
+        assert "success" in results[0]
+
+
 class TestPathPrefix:
     def test_prefix_routes(self, db):
         app = create_app(
