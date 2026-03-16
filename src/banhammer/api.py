@@ -219,29 +219,26 @@ def create_app(
     @app.post(f"{prefix}/api/v1/whitelist")
     async def whitelist_add_endpoint(req: WhitelistRequest, _=Depends(verify_api_key)):
         db.whitelist_add(req.ip)
-        if poller is not None:
-            jails_data = db.get_latest_status() or {}
-            for jail in jails_data:
-                try:
-                    result = subprocess.run(
-                        [poller.client_path, "set", jail, "unbanip", req.ip],
-                        capture_output=True, text=True, timeout=10,
-                    )
-                    if result.returncode != 0:
-                        logger.warning("Unban %s from %s failed: %s", req.ip, jail,
-                                       result.stderr.strip() or result.stdout.strip())
-                except Exception as exc:
-                    logger.warning("Unban %s from %s error: %s", req.ip, jail, exc)
-                try:
-                    result = subprocess.run(
+        if poller:
+            try:
+                latest = db.get_latest_status()
+                jails = poller.get_jail_list()
+                for jail in jails:
+                    # Only unban if IP is actually banned in this jail
+                    jail_status = (latest or {}).get(jail, {})
+                    banned_ips = jail_status.get("banned_ips", [])
+                    if req.ip in banned_ips:
+                        subprocess.run(
+                            [poller.client_path, "set", jail, "unbanip", req.ip],
+                            capture_output=True, text=True, timeout=10,
+                        )
+                    # Always add to ignore list for all jails
+                    subprocess.run(
                         [poller.client_path, "set", jail, "addignoreip", req.ip],
                         capture_output=True, text=True, timeout=10,
                     )
-                    if result.returncode != 0:
-                        logger.warning("addignoreip %s in %s failed: %s", req.ip, jail,
-                                       result.stderr.strip() or result.stdout.strip())
-                except Exception as exc:
-                    logger.warning("addignoreip %s in %s error: %s", req.ip, jail, exc)
+            except Exception:
+                logger.warning("Failed to apply whitelist to fail2ban for %s", req.ip)
         return {"status": "ok"}
 
     @app.delete(f"{prefix}/api/v1/whitelist/{{ip}}")

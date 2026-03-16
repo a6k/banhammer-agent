@@ -183,10 +183,14 @@ def test_top_attackers_includes_timestamps(db):
 # Task 3: timeline_buckets
 def test_timeline_buckets_24h(db):
     now = time.time()
-    db._insert_with_timestamp("ban", "sshd", "1.1.1.1", "2026-03-15T10:00:00Z", now - 3600)
-    db._insert_with_timestamp("ban", "sshd", "1.1.1.2", "2026-03-15T10:30:00Z", now - 3600)
-    db._insert_with_timestamp("ban", "postfix", "2.2.2.2", "2026-03-15T10:15:00Z", now - 3600)
-    db._insert_with_timestamp("ban", "sshd", "3.3.3.3", "2026-03-15T11:00:00Z", now - 100)
+    # Use dynamic timestamps relative to now so the test doesn't depend on hardcoded dates
+    ts_1h_ago = time.strftime("%Y-%m-%dT%H:00:00Z", time.gmtime(now - 3600))
+    ts_30m_ago = time.strftime("%Y-%m-%dT%H:30:00Z", time.gmtime(now - 1800))
+    ts_2m_ago = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - 120))
+    db._insert_with_timestamp("ban", "sshd", "1.1.1.1", ts_1h_ago, now - 3600)
+    db._insert_with_timestamp("ban", "sshd", "1.1.1.2", ts_30m_ago, now - 1800)
+    db._insert_with_timestamp("ban", "postfix", "2.2.2.2", ts_30m_ago, now - 1800)
+    db._insert_with_timestamp("ban", "sshd", "3.3.3.3", ts_2m_ago, now - 120)
     buckets = db.timeline_buckets(period="24h")
     assert isinstance(buckets, list)
     assert len(buckets) >= 1

@@ -198,17 +198,17 @@ class EventDB:
 
     def timeline_buckets(self, period: str = "24h") -> list[dict]:
         """Return ban counts grouped by hour and jail for the given period."""
-        hours_map = {"24h": 24, "7d": 168, "30d": 720}
-        hours = hours_map.get(period, 24)
-        cutoff = time.time() - hours * 3600
+        hours = {"24h": 24, "7d": 7 * 24, "30d": 30 * 24}.get(period, 24)
+        cutoff_time = time.time() - hours * 3600
+        # Convert to ISO8601 for string comparison (SQLite sorts ISO8601 strings correctly)
+        cutoff = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(cutoff_time))
         with self._lock:
             with self._connect() as conn:
                 rows = conn.execute(
-                    "SELECT strftime('%Y-%m-%dT%H:00:00Z', timestamp) as hour, jail, COUNT(*) as cnt "
-                    "FROM ban_events "
-                    "WHERE created_at >= ? "
-                    "GROUP BY hour, jail "
-                    "ORDER BY hour ASC",
+                    "SELECT strftime('%Y-%m-%dT%H:00:00Z', timestamp) as hour, "
+                    "jail, COUNT(*) as cnt "
+                    "FROM ban_events WHERE type = 'ban' AND timestamp >= ? "
+                    "GROUP BY hour, jail ORDER BY hour",
                     (cutoff,),
                 ).fetchall()
         # Aggregate into buckets keyed by hour
