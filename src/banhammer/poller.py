@@ -178,7 +178,8 @@ class Poller:
                 cmd, capture_output=True, text=True, timeout=10,
             )
             if result.stdout:
-                matching = [l for l in result.stdout.splitlines() if ip in l]
+                ip_pattern = re.compile(r'(?<![0-9a-fA-F:.])' + re.escape(ip) + r'(?![0-9a-fA-F:.])')
+                matching = [l for l in result.stdout.splitlines() if ip_pattern.search(l)]
                 return matching[-max_lines:]
         except Exception:
             pass

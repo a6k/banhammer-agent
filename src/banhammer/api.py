@@ -81,9 +81,18 @@ class RateLimiter:
 
             # Periodic cleanup every 100 checks
             if self._check_count % 100 == 0:
-                stale = [k for k, v in self._requests.items() if not v or now - v[-1] >= self.window]
+                stale = [k for k, v in self._requests.items()
+                         if not v or (now - v[-1]) >= self.window]
                 for k in stale:
                     del self._requests[k]
+
+                # Hard cap to prevent unbounded growth
+                if len(self._requests) > 10000:
+                    # Emergency prune: remove oldest half
+                    sorted_ips = sorted(self._requests.keys(),
+                                        key=lambda k: self._requests[k][-1] if self._requests[k] else 0)
+                    for k in sorted_ips[:5000]:
+                        del self._requests[k]
 
             window = self._requests.get(client_ip, [])
             window = [t for t in window if now - t < self.window]
