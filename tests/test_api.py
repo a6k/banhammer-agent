@@ -143,6 +143,31 @@ class TestStats:
         assert data["bans_by_jail"]["sshd"] == 2
 
 
+# --- /api/v1/stats/countries ---
+
+class TestCountries:
+    def test_countries_requires_auth(self, client):
+        resp = client.get("/api/v1/stats/countries")
+        assert resp.status_code == 401
+
+    def test_countries_returns_data(self, client, db):
+        db.insert_event("ban", "sshd", "1.1.1.1", "2026-03-15T10:00:00Z",
+                         country_code="CN", country_name="China")
+        db.insert_event("ban", "sshd", "2.2.2.2", "2026-03-15T10:01:00Z",
+                         country_code="RU", country_name="Russia")
+        resp = client.get("/api/v1/stats/countries", headers=auth_headers())
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_bans"] == 2
+        assert data["countries"][0]["country_code"] == "CN"
+
+    def test_countries_empty(self, client):
+        resp = client.get("/api/v1/stats/countries", headers=auth_headers())
+        assert resp.status_code == 200
+        assert resp.json()["total_bans"] == 0
+        assert resp.json()["countries"] == []
+
+
 # --- /api/v1/stats/timeline ---
 
 class TestTimeline:

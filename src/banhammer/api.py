@@ -174,6 +174,10 @@ def create_app(
             "total_bans_7d": db.bans_since(now - 7 * 86400),
         }
 
+    @app.get(f"{prefix}/api/v1/stats/countries")
+    async def countries(_=Depends(verify_api_key)):
+        return db.countries_stats()
+
     @app.get(f"{prefix}/api/v1/stats/timeline")
     async def timeline(
         period: Annotated[str, Query(pattern="^(24h|7d|30d)$")] = "24h",
