@@ -1,4 +1,6 @@
+import hmac
 import ipaddress
+import logging
 import re
 import socket
 import subprocess
@@ -13,6 +15,8 @@ from pydantic import BaseModel, field_validator
 
 from banhammer.db import EventDB
 
+logger = logging.getLogger("banhammer")
+
 JAIL_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 security = HTTPBearer()
@@ -23,6 +27,14 @@ def _get_version() -> str:
         return pkg_version("banhammer-agent")
     except Exception:
         return "0.2.0"
+
+
+def _get_client_ip(request: Request) -> str:
+    """HIGH-1: Use X-Real-IP when behind a reverse proxy on loopback."""
+    peer = request.client.host if request.client else "unknown"
+    if peer in ("127.0.0.1", "::1"):
+        return request.headers.get("X-Real-IP") or peer
+    return peer
 
 
 class UnbanRequest(BaseModel):
@@ -58,10 +70,19 @@ class RateLimiter:
         now = time.time()
         if client_ip not in self._requests:
             self._requests[client_ip] = []
-        # Prune old entries
+        # Prune old entries for this IP
         self._requests[client_ip] = [
             t for t in self._requests[client_ip] if now - t < self.window
         ]
+        # MED-1: Delete empty keys and prune stale entries
+        if not self._requests[client_ip]:
+            del self._requests[client_ip]
+            # Periodic full cleanup when dict grows large
+            if len(self._requests) > 1000:
+                stale = [k for k, v in self._requests.items() if not v or now - v[-1] >= self.window]
+                for k in stale:
+                    del self._requests[k]
+            return True  # was empty, so not rate limited
         if len(self._requests[client_ip]) >= self.max_requests:
             return False
         self._requests[client_ip].append(now)
@@ -80,13 +101,15 @@ def create_app(
     rate_limiter = RateLimiter(max_requests=10, window_seconds=1.0)
 
     def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)):
-        if credentials.credentials != api_key:
+        # HIGH-3: Use constant-time comparison for API key
+        if not hmac.compare_digest(credentials.credentials, api_key):
             raise HTTPException(status_code=401, detail="Invalid API key")
         return credentials
 
     @app.middleware("http")
     async def rate_limit_middleware(request: Request, call_next):
-        client_ip = request.client.host if request.client else "unknown"
+        # HIGH-1: Use X-Real-IP behind reverse proxy
+        client_ip = _get_client_ip(request)
         if not rate_limiter.check(client_ip):
             return JSONResponse(
                 status_code=429,
@@ -96,11 +119,8 @@ def create_app(
 
     @app.get(f"{prefix}/api/v1/health")
     async def health():
-        return {
-            "status": "ok",
-            "version": _get_version(),
-            "hostname": socket.gethostname(),
-        }
+        # HIGH-2: Only return status, no hostname/version
+        return {"status": "ok"}
 
     @app.get(f"{prefix}/api/v1/status")
     async def status(_=Depends(verify_api_key)):
@@ -108,6 +128,7 @@ def create_app(
         return {
             "server_id": server_id,
             "hostname": socket.gethostname(),
+            "version": _get_version(),
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "jails": latest or {},
         }
@@ -149,9 +170,11 @@ def create_app(
                 timeout=10,
             )
             if result.returncode != 0:
+                # HIGH-5: Don't reflect fail2ban-client stderr to caller
+                logger.warning("Unban failed: %s", result.stderr.strip() or result.stdout.strip())
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Failed to unban: {result.stderr.strip() or result.stdout.strip()}",
+                    detail="Unban command failed. Check server logs.",
                 )
             return {"status": "ok", "message": f"{req.ip} unbanned from {req.jail}"}
         except subprocess.TimeoutExpired:

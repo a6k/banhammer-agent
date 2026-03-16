@@ -1,4 +1,5 @@
 import hashlib
+import ipaddress
 import os
 import re
 from datetime import datetime, timezone
@@ -22,6 +23,13 @@ def parse_fail2ban_line(line: str) -> dict | None:
     if not match:
         return None
     timestamp_str, jail, action, ip = match.groups()
+
+    # MED-4: Validate IP before returning event
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError:
+        return None
+
     timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
     timestamp = timestamp.replace(tzinfo=timezone.utc)
     return {

@@ -47,7 +47,7 @@ class EventDB:
                     "CREATE INDEX IF NOT EXISTS idx_events_type ON ban_events(type)"
                 )
 
-    def _execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
+    def __execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
         """Low-level execute for tests and internal use."""
         with self._lock:
             with self._connect() as conn:
@@ -140,4 +140,5 @@ class EventDB:
         return json.loads(row[0])
 
     def size_bytes(self) -> int:
-        return Path(self.db_path).stat().st_size
+        p = Path(self.db_path)
+        return p.stat().st_size if p.exists() else 0

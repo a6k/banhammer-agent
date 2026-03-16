@@ -1,5 +1,11 @@
+import ipaddress
+import os
 import re
 import subprocess
+
+ALLOWED_LOG_DIRS = ("/var/log/",)
+
+JOURNAL_MATCH_RE = re.compile(r"^_[A-Z_]+=[\w@./:+.-]+$")
 
 
 def parse_status_output(output: str) -> list[str]:
@@ -31,10 +37,19 @@ def parse_jail_status_output(output: str) -> dict:
             if ip_str:
                 banned_ips = ip_str.split()
 
+    # CRIT-3: Validate IPs parsed from fail2ban-client output
+    validated_ips = []
+    for ip_str in banned_ips:
+        try:
+            ipaddress.ip_address(ip_str)
+            validated_ips.append(ip_str)
+        except ValueError:
+            pass
+
     return {
         "active_bans": active_bans,
         "total_bans": total_bans,
-        "banned_ips": banned_ips,
+        "banned_ips": validated_ips,
     }
 
 
@@ -83,8 +98,23 @@ class Poller:
             }
         return jail_data
 
+    def _validate_log_path(self, path: str) -> bool:
+        """CRIT-2: Ensure log path is absolute, under allowed dirs, and a regular file."""
+        real = os.path.realpath(path)
+        if not any(real.startswith(d) for d in ALLOWED_LOG_DIRS):
+            return False
+        if not os.path.isfile(real):
+            return False
+        return True
+
     def lookup_ip(self, jail: str, ip: str, max_lines: int = 10) -> list[str]:
         """Look up recent log entries for an IP in a jail's log source."""
+        # CRIT-3: Validate IP before using it in commands
+        try:
+            ipaddress.ip_address(ip)
+        except ValueError:
+            return []
+
         lines = []
 
         # Try logpath first (file-based logging)
@@ -94,6 +124,9 @@ class Poller:
                 if line.startswith("`-"):
                     log_path = line.split("`-")[1].strip()
                     if log_path:
+                        # CRIT-2: Validate log path before reading
+                        if not self._validate_log_path(log_path):
+                            continue
                         lines = self._grep_file(log_path, ip, max_lines)
                         if lines:
                             return lines
@@ -110,8 +143,11 @@ class Poller:
                     if "=" in token and not token.startswith("Current"):
                         match_parts.append(token)
 
-            if match_parts:
-                lines = self._grep_journal(match_parts, ip, max_lines)
+            # CRIT-3: Validate journal match parts
+            validated_parts = [p for p in match_parts if JOURNAL_MATCH_RE.match(p)]
+
+            if validated_parts:
+                lines = self._grep_journal(validated_parts, ip, max_lines)
         except Exception:
             pass
 
@@ -119,8 +155,9 @@ class Poller:
 
     def _grep_file(self, path: str, ip: str, max_lines: int) -> list[str]:
         try:
+            # CRIT-3: Use -F for fixed-string matching instead of -i
             result = subprocess.run(
-                ["grep", "-i", ip, path],
+                ["grep", "-F", ip, path],
                 capture_output=True, text=True, timeout=10,
             )
             if result.stdout:

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from banhammer.api import create_app
 from banhammer.db import EventDB
 
-API_KEY = "bh_testapikey1234567890abcdef12"
+API_KEY = "bh_testapikey1234567890abcdef1234"
 
 
 @pytest.fixture
@@ -42,12 +42,13 @@ class TestHealth:
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "ok"
-        assert "version" in data
-        assert "hostname" in data
+        # HIGH-2: health endpoint no longer exposes version or hostname
+        assert "version" not in data
+        assert "hostname" not in data
 
-    def test_health_returns_version(self, client):
+    def test_health_returns_only_status(self, client):
         resp = client.get("/api/v1/health")
-        assert re.match(r"\d+\.\d+\.\d+", resp.json()["version"])
+        assert resp.json() == {"status": "ok"}
 
 
 # --- /api/v1/status ---

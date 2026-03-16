@@ -16,7 +16,7 @@ def _make_config(tmp_path):
         "api": {
             "bind": "127.0.0.1",
             "port": 18443,  # Use high port for tests
-            "api_key": "bh_testapikey1234567890abcdef12",
+            "api_key": "bh_testapikey1234567890abcdef1234",
         },
         "agent": {
             "server_id": "test-server",
