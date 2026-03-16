@@ -38,7 +38,11 @@ def _is_loopback(bind: str) -> bool:
     try:
         return ipaddress.ip_address(bind).is_loopback
     except ValueError:
-        return False
+        try:
+            resolved = socket.getaddrinfo(bind, None, type=socket.SOCK_STREAM)
+            return all(ipaddress.ip_address(r[4][0]).is_loopback for r in resolved)
+        except Exception:
+            return False
 
 
 def load_config(path: str) -> dict:

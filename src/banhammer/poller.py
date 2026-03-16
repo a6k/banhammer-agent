@@ -5,6 +5,8 @@ import subprocess
 
 ALLOWED_LOG_DIRS = ("/var/log/",)
 
+MAX_LINE_LEN = 512
+
 JAIL_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 JOURNAL_MATCH_RE = re.compile(r"^_[A-Z_]+=[A-Za-z0-9@._-]+$")
@@ -164,7 +166,8 @@ class Poller:
                 capture_output=True, text=True, timeout=10,
             )
             if result.stdout:
-                return result.stdout.strip().splitlines()[-max_lines:]
+                lines = [l[:MAX_LINE_LEN] for l in result.stdout.strip().splitlines()][-max_lines:]
+                return lines
         except Exception:
             pass
         return []
@@ -179,7 +182,7 @@ class Poller:
             )
             if result.stdout:
                 ip_pattern = re.compile(r'(?<![0-9a-fA-F:.])' + re.escape(ip) + r'(?![0-9a-fA-F:.])')
-                matching = [l for l in result.stdout.splitlines() if ip_pattern.search(l)]
+                matching = [l[:MAX_LINE_LEN] for l in result.stdout.splitlines() if ip_pattern.search(l)]
                 return matching[-max_lines:]
         except Exception:
             pass

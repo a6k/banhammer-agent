@@ -31,6 +31,8 @@ class GeoIPService:
         self._cache: dict[str, Optional[dict]] = {}
         self._max_cache = 10000
         self._cache_lock = threading.Lock()
+        self._in_flight: set[str] = set()
+        self._in_flight_lock = threading.Lock()
 
     def lookup(self, ip: str) -> dict | None:
         """Resolve IP to geo data. Returns None for private/invalid IPs or on failure."""
@@ -42,31 +44,42 @@ class GeoIPService:
         if addr.is_private or addr.is_reserved or addr.is_loopback:
             return None
 
+        # Check cache
         with self._cache_lock:
             if ip in self._cache:
                 return self._cache[ip]
 
-        result = None
+        # Coalesce concurrent lookups for same IP
+        with self._in_flight_lock:
+            if ip in self._in_flight:
+                return None  # Another thread is resolving this IP; skip
+            self._in_flight.add(ip)
 
-        if self._reader:
-            try:
-                result = self._lookup_geoip2(ip)
-            except Exception:
-                pass
+        try:
+            result = None
 
-        if result is None and self._allow_http_fallback:
-            try:
-                result = self._lookup_api(ip)
-            except Exception:
-                pass
+            if self._reader:
+                try:
+                    result = self._lookup_geoip2(ip)
+                except Exception:
+                    pass
 
-        # Store in cache
-        with self._cache_lock:
-            if len(self._cache) >= self._max_cache:
-                for key in list(self._cache.keys())[:1000]:
-                    del self._cache[key]
-            self._cache[ip] = result
-        return result
+            if result is None and self._allow_http_fallback:
+                try:
+                    result = self._lookup_api(ip)
+                except Exception:
+                    pass
+
+            # Store in cache
+            with self._cache_lock:
+                if len(self._cache) >= self._max_cache:
+                    for key in list(self._cache.keys())[:1000]:
+                        del self._cache[key]
+                self._cache[ip] = result
+            return result
+        finally:
+            with self._in_flight_lock:
+                self._in_flight.discard(ip)
 
     def _lookup_geoip2(self, ip: str) -> dict | None:
         resp = self._reader.city(ip)

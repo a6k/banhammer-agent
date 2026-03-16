@@ -143,7 +143,7 @@ class RateLimiter:
             return True
 
 
-def _do_bulk_unban(entries, poller_ref, client_path):
+def _do_bulk_unban(entries, poller_ref):
     results = []
     for entry in entries:
         if poller_ref is None:
@@ -152,7 +152,7 @@ def _do_bulk_unban(entries, poller_ref, client_path):
             continue
         try:
             result = subprocess.run(
-                [client_path, "set", entry.jail, "unbanip", entry.ip],
+                [poller_ref.client_path, "set", entry.jail, "unbanip", entry.ip],
                 capture_output=True, text=True, timeout=10,
             )
             if result.returncode != 0:
@@ -244,25 +244,27 @@ def create_app(
     async def whitelist_add_endpoint(req: WhitelistRequest, _=Depends(verify_api_key)):
         db.whitelist_add(req.ip)
         if poller:
-            try:
-                latest = db.get_latest_status()
-                jails = poller.get_jail_list()
-                for jail in jails:
-                    # Only unban if IP is actually banned in this jail
-                    jail_status = (latest or {}).get(jail, {})
-                    banned_ips = jail_status.get("banned_ips", [])
-                    if req.ip in banned_ips:
+            def _apply_whitelist_add(ip, poller_ref):
+                try:
+                    latest = db.get_latest_status()
+                    jails = poller_ref.get_jail_list()
+                    for jail in jails:
+                        # Only unban if IP is actually banned in this jail
+                        jail_status = (latest or {}).get(jail, {})
+                        banned_ips = jail_status.get("banned_ips", [])
+                        if ip in banned_ips:
+                            subprocess.run(
+                                [poller_ref.client_path, "set", jail, "unbanip", ip],
+                                capture_output=True, text=True, timeout=10,
+                            )
+                        # Always add to ignore list for all jails
                         subprocess.run(
-                            [poller.client_path, "set", jail, "unbanip", req.ip],
+                            [poller_ref.client_path, "set", jail, "addignoreip", ip],
                             capture_output=True, text=True, timeout=10,
                         )
-                    # Always add to ignore list for all jails
-                    subprocess.run(
-                        [poller.client_path, "set", jail, "addignoreip", req.ip],
-                        capture_output=True, text=True, timeout=10,
-                    )
-            except Exception:
-                logger.warning("Failed to apply whitelist to fail2ban for %s", req.ip)
+                except Exception:
+                    logger.warning("Failed to apply whitelist to fail2ban for %s", ip)
+            await asyncio.to_thread(_apply_whitelist_add, req.ip, poller)
         return {"status": "ok"}
 
     @app.delete(f"{prefix}/api/v1/whitelist/{{ip}}")
@@ -275,15 +277,17 @@ def create_app(
         if not removed:
             raise HTTPException(status_code=404, detail=f"{ip} not in whitelist")
         if poller:
-            try:
-                jails = poller.get_jail_list()
-                for jail in jails:
-                    subprocess.run(
-                        [poller.client_path, "set", jail, "delignoreip", ip],
-                        capture_output=True, text=True, timeout=10,
-                    )
-            except Exception:
-                logger.warning("Failed to remove whitelist from fail2ban for %s", ip)
+            def _apply_whitelist_delete(ip_addr, poller_ref):
+                try:
+                    jails = poller_ref.get_jail_list()
+                    for jail in jails:
+                        subprocess.run(
+                            [poller_ref.client_path, "set", jail, "delignoreip", ip_addr],
+                            capture_output=True, text=True, timeout=10,
+                        )
+                except Exception:
+                    logger.warning("Failed to remove whitelist from fail2ban for %s", ip_addr)
+            await asyncio.to_thread(_apply_whitelist_delete, ip, poller)
         return {"status": "ok"}
 
     @app.get(f"{prefix}/api/v1/stats/countries")
@@ -300,21 +304,20 @@ def create_app(
 
     @app.post(f"{prefix}/api/v1/unban/bulk")
     async def unban_bulk(req: BulkUnbanRequest, _=Depends(verify_api_key)):
-        client_path = poller.client_path if poller else None
-        results = await asyncio.to_thread(_do_bulk_unban, req.entries, poller, client_path)
+        results = await asyncio.to_thread(_do_bulk_unban, req.entries, poller)
         return {"results": results}
 
     @app.post(f"{prefix}/api/v1/unban")
     async def unban(req: UnbanRequest, _=Depends(verify_api_key)):
         if poller is None:
             raise HTTPException(status_code=503, detail="Poller not available")
-        try:
-            result = subprocess.run(
+        def _do():
+            return subprocess.run(
                 [poller.client_path, "set", req.jail, "unbanip", req.ip],
-                capture_output=True,
-                text=True,
-                timeout=10,
+                capture_output=True, text=True, timeout=10,
             )
+        try:
+            result = await asyncio.to_thread(_do)
             if result.returncode != 0:
                 # HIGH-5: Don't reflect fail2ban-client stderr to caller
                 logger.warning("Unban failed: %s", result.stderr.strip() or result.stdout.strip())

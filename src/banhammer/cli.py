@@ -206,6 +206,7 @@ def cmd_init(args):
     print(f"Config written to {config_file}")
     print(f"Data directory: {data_dir}")
     print(f"API Key: {api_key}")
+    print("⚠  Store this key securely — it will not be shown again.")
     print(f"Path prefix: {path_prefix}")
     print(f"Agent API will be available at https://your-server{path_prefix}/api/v1/health")
     print("Start the agent with: banhammer-agent run")
@@ -248,6 +249,7 @@ def cmd_backfill(args):
             break
         total += len(rows)
         logger.info("Processing batch of %d events (%d total so far)", len(rows), total)
+        updated_this_batch = 0
         for event_id, ip in rows:
             result = geo.lookup(ip)
             if result:
@@ -257,6 +259,10 @@ def cmd_backfill(args):
                     country_name=result["country_name"], city=result["city"],
                 )
                 updated += 1
+                updated_this_batch += 1
+        if updated_this_batch == 0:
+            logger.info("No geo resolutions in this batch — remaining %d events cannot be resolved", len(rows))
+            break
 
     logger.info("Backfill complete: %d/%d events enriched", updated, total)
     print(f"Backfill complete: {updated}/{total} events enriched with geo data")
