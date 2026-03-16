@@ -152,7 +152,7 @@ def _do_bulk_unban(entries, poller_ref):
             continue
         try:
             result = subprocess.run(
-                [poller_ref.client_path, "set", entry.jail, "unbanip", entry.ip],
+                poller_ref.build_cmd("set", entry.jail, "unbanip", entry.ip),
                 capture_output=True, text=True, timeout=10,
             )
             if result.returncode != 0:
@@ -254,12 +254,12 @@ def create_app(
                         banned_ips = jail_status.get("banned_ips", [])
                         if ip in banned_ips:
                             subprocess.run(
-                                [poller_ref.client_path, "set", jail, "unbanip", ip],
+                                poller_ref.build_cmd("set", jail, "unbanip", ip),
                                 capture_output=True, text=True, timeout=10,
                             )
                         # Always add to ignore list for all jails
                         subprocess.run(
-                            [poller_ref.client_path, "set", jail, "addignoreip", ip],
+                            poller_ref.build_cmd("set", jail, "addignoreip", ip),
                             capture_output=True, text=True, timeout=10,
                         )
                 except Exception:
@@ -282,7 +282,7 @@ def create_app(
                     jails = poller_ref.get_jail_list()
                     for jail in jails:
                         subprocess.run(
-                            [poller_ref.client_path, "set", jail, "delignoreip", ip_addr],
+                            poller_ref.build_cmd("set", jail, "delignoreip", ip_addr),
                             capture_output=True, text=True, timeout=10,
                         )
                 except Exception:
@@ -313,7 +313,7 @@ def create_app(
             raise HTTPException(status_code=503, detail="Poller not available")
         def _do():
             return subprocess.run(
-                [poller.client_path, "set", req.jail, "unbanip", req.ip],
+                poller.build_cmd("set", req.jail, "unbanip", req.ip),
                 capture_output=True, text=True, timeout=10,
             )
         try:

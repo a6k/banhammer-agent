@@ -34,7 +34,10 @@ class Agent:
         self.running = False
         self.db = EventDB(config["storage"]["db_path"])
         self.tailer = LogTailer(config["fail2ban"]["log_path"])
-        self.poller = Poller(config["fail2ban"]["client_path"])
+        self.poller = Poller(
+            config["fail2ban"]["client_path"],
+            use_sudo=config["fail2ban"].get("use_sudo", False),
+        )
         geo_config = config.get("geo", {})
         self.geo = GeoIPService(
             db_path=geo_config.get("geoip_db_path"),

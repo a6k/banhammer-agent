@@ -16,6 +16,7 @@ poll_interval = 60
 [fail2ban]
 log_path = "/var/log/fail2ban.log"
 client_path = "/usr/bin/fail2ban-client"
+# use_sudo = true  # Required when running as non-root user (recommended)
 
 [storage]
 db_path = "/var/lib/banhammer/banhammer.db"

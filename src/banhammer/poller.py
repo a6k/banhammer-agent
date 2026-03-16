@@ -58,13 +58,21 @@ def parse_jail_status_output(output: str) -> dict:
 
 
 class Poller:
-    def __init__(self, client_path: str, timeout: int = 10):
+    def __init__(self, client_path: str, timeout: int = 10, use_sudo: bool = False):
         self.client_path = client_path
         self.timeout = timeout
+        self.use_sudo = use_sudo
+
+    def build_cmd(self, *args: str) -> list[str]:
+        """Build command list for fail2ban-client, with optional sudo prefix."""
+        cmd = [self.client_path, *args]
+        if self.use_sudo:
+            cmd = ["sudo"] + cmd
+        return cmd
 
     def _run(self, *args: str) -> str:
         result = subprocess.run(
-            [self.client_path, *args],
+            self.build_cmd(*args),
             capture_output=True,
             text=True,
             timeout=self.timeout,
