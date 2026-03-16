@@ -143,6 +143,43 @@ class TestStats:
         assert data["bans_by_jail"]["sshd"] == 2
 
 
+# --- /api/v1/whitelist ---
+
+class TestWhitelist:
+    def test_whitelist_requires_auth(self, client):
+        assert client.get("/api/v1/whitelist").status_code == 401
+        assert client.post("/api/v1/whitelist", json={"ip": "1.2.3.4"}).status_code == 401
+
+    def test_whitelist_add_and_list(self, client, db):
+        resp = client.post("/api/v1/whitelist", json={"ip": "1.2.3.4"},
+                           headers=auth_headers())
+        assert resp.status_code == 200
+        resp = client.get("/api/v1/whitelist", headers=auth_headers())
+        assert "1.2.3.4" in resp.json()["ips"]
+
+    def test_whitelist_add_idempotent(self, client):
+        client.post("/api/v1/whitelist", json={"ip": "1.2.3.4"}, headers=auth_headers())
+        resp = client.post("/api/v1/whitelist", json={"ip": "1.2.3.4"},
+                           headers=auth_headers())
+        assert resp.status_code == 200
+
+    def test_whitelist_add_validates_ip(self, client):
+        resp = client.post("/api/v1/whitelist", json={"ip": "not-an-ip"},
+                           headers=auth_headers())
+        assert resp.status_code == 422
+
+    def test_whitelist_delete(self, client, db):
+        client.post("/api/v1/whitelist", json={"ip": "1.2.3.4"}, headers=auth_headers())
+        resp = client.delete("/api/v1/whitelist/1.2.3.4", headers=auth_headers())
+        assert resp.status_code == 200
+        resp = client.get("/api/v1/whitelist", headers=auth_headers())
+        assert "1.2.3.4" not in resp.json()["ips"]
+
+    def test_whitelist_delete_nonexistent(self, client):
+        resp = client.delete("/api/v1/whitelist/9.9.9.9", headers=auth_headers())
+        assert resp.status_code == 404
+
+
 # --- /api/v1/stats/countries ---
 
 class TestCountries:

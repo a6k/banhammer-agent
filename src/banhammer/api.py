@@ -43,6 +43,19 @@ def _get_client_ip(request: Request) -> str:
     return peer
 
 
+class WhitelistRequest(BaseModel):
+    ip: str
+
+    @field_validator("ip")
+    @classmethod
+    def validate_ip(cls, v: str) -> str:
+        try:
+            ipaddress.ip_address(v)
+        except ValueError:
+            raise ValueError(f"Invalid IP address: {v}")
+        return v
+
+
 class UnbanRequest(BaseModel):
     ip: str
     jail: str
@@ -173,6 +186,62 @@ def create_app(
             "total_bans_24h": db.bans_since(now - 86400),
             "total_bans_7d": db.bans_since(now - 7 * 86400),
         }
+
+    @app.get(f"{prefix}/api/v1/whitelist")
+    async def whitelist_list_endpoint(_=Depends(verify_api_key)):
+        return {"ips": db.whitelist_list()}
+
+    @app.post(f"{prefix}/api/v1/whitelist")
+    async def whitelist_add_endpoint(req: WhitelistRequest, _=Depends(verify_api_key)):
+        db.whitelist_add(req.ip)
+        if poller is not None:
+            jails_data = db.get_latest_status() or {}
+            for jail in jails_data:
+                try:
+                    result = subprocess.run(
+                        [poller.client_path, "set", jail, "unbanip", req.ip],
+                        capture_output=True, text=True, timeout=10,
+                    )
+                    if result.returncode != 0:
+                        logger.warning("Unban %s from %s failed: %s", req.ip, jail,
+                                       result.stderr.strip() or result.stdout.strip())
+                except Exception as exc:
+                    logger.warning("Unban %s from %s error: %s", req.ip, jail, exc)
+                try:
+                    result = subprocess.run(
+                        [poller.client_path, "set", jail, "addignoreip", req.ip],
+                        capture_output=True, text=True, timeout=10,
+                    )
+                    if result.returncode != 0:
+                        logger.warning("addignoreip %s in %s failed: %s", req.ip, jail,
+                                       result.stderr.strip() or result.stdout.strip())
+                except Exception as exc:
+                    logger.warning("addignoreip %s in %s error: %s", req.ip, jail, exc)
+        return {"status": "ok"}
+
+    @app.delete(f"{prefix}/api/v1/whitelist/{{ip}}")
+    async def whitelist_delete_endpoint(ip: str, _=Depends(verify_api_key)):
+        try:
+            ipaddress.ip_address(ip)
+        except ValueError:
+            raise HTTPException(status_code=422, detail=f"Invalid IP address: {ip}")
+        removed = db.whitelist_remove(ip)
+        if not removed:
+            raise HTTPException(status_code=404, detail=f"{ip} not in whitelist")
+        if poller is not None:
+            jails_data = db.get_latest_status() or {}
+            for jail in jails_data:
+                try:
+                    result = subprocess.run(
+                        [poller.client_path, "set", jail, "delignoreip", ip],
+                        capture_output=True, text=True, timeout=10,
+                    )
+                    if result.returncode != 0:
+                        logger.warning("delignoreip %s in %s failed: %s", ip, jail,
+                                       result.stderr.strip() or result.stdout.strip())
+                except Exception as exc:
+                    logger.warning("delignoreip %s in %s error: %s", ip, jail, exc)
+        return {"status": "ok"}
 
     @app.get(f"{prefix}/api/v1/stats/countries")
     async def countries(_=Depends(verify_api_key)):
