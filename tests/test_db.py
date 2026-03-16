@@ -128,3 +128,127 @@ def test_db_size_bytes(db):
     db.insert_event("ban", "sshd", "1.2.3.4", "2026-03-15T12:00:00Z")
     size = db.size_bytes()
     assert size > 0
+
+
+# Task 1: Geo columns
+def test_insert_event_with_geo(db):
+    db.insert_event("ban", "sshd", "1.2.3.4", "2026-03-15T12:00:00Z",
+                     lat=39.9, lon=116.4, country_code="CN",
+                     country_name="China", city="Beijing")
+    events = db.get_events(limit=1, offset=0)
+    assert events[0]["lat"] == 39.9
+    assert events[0]["lon"] == 116.4
+    assert events[0]["country_code"] == "CN"
+    assert events[0]["country_name"] == "China"
+    assert events[0]["city"] == "Beijing"
+
+
+def test_insert_event_without_geo_returns_none(db):
+    db.insert_event("ban", "sshd", "1.2.3.4", "2026-03-15T12:00:00Z")
+    events = db.get_events(limit=1, offset=0)
+    assert events[0]["lat"] is None
+    assert events[0]["country_code"] is None
+
+
+def test_get_events_missing_geo(db):
+    db.insert_event("ban", "sshd", "1.1.1.1", "2026-03-15T10:00:00Z",
+                     country_code="CN", country_name="China")
+    db.insert_event("ban", "sshd", "2.2.2.2", "2026-03-15T10:01:00Z")
+    missing = db.get_events_missing_geo()
+    assert len(missing) == 1
+    assert missing[0][1] == "2.2.2.2"
+
+
+def test_update_event_geo(db):
+    db.insert_event("ban", "sshd", "1.1.1.1", "2026-03-15T10:00:00Z")
+    missing = db.get_events_missing_geo()
+    event_id = missing[0][0]
+    db.update_event_geo(event_id, lat=39.9, lon=116.4,
+                         country_code="CN", country_name="China", city="Beijing")
+    events = db.get_events(limit=1, offset=0)
+    assert events[0]["country_code"] == "CN"
+    assert events[0]["lat"] == 39.9
+    assert len(db.get_events_missing_geo()) == 0
+
+
+# Task 2: top_attackers with first_seen/last_seen
+def test_top_attackers_includes_timestamps(db):
+    db.insert_event("ban", "sshd", "1.2.3.4", "2026-03-10T08:00:00Z")
+    db.insert_event("ban", "sshd", "1.2.3.4", "2026-03-15T12:00:00Z")
+    attackers = db.top_attackers(limit=10)
+    assert attackers[0]["first_seen"] == "2026-03-10T08:00:00Z"
+    assert attackers[0]["last_seen"] == "2026-03-15T12:00:00Z"
+
+
+# Task 3: timeline_buckets
+def test_timeline_buckets_24h(db):
+    now = time.time()
+    db._insert_with_timestamp("ban", "sshd", "1.1.1.1", "2026-03-15T10:00:00Z", now - 3600)
+    db._insert_with_timestamp("ban", "sshd", "1.1.1.2", "2026-03-15T10:30:00Z", now - 3600)
+    db._insert_with_timestamp("ban", "postfix", "2.2.2.2", "2026-03-15T10:15:00Z", now - 3600)
+    db._insert_with_timestamp("ban", "sshd", "3.3.3.3", "2026-03-15T11:00:00Z", now - 100)
+    buckets = db.timeline_buckets(period="24h")
+    assert isinstance(buckets, list)
+    assert len(buckets) >= 1
+    bucket = buckets[0]
+    assert "timestamp" in bucket
+    assert "total" in bucket
+    assert "by_jail" in bucket
+
+
+# Task 4: countries_stats
+def test_countries_stats(db):
+    db.insert_event("ban", "sshd", "1.1.1.1", "2026-03-15T10:00:00Z",
+                     country_code="CN", country_name="China")
+    db.insert_event("ban", "sshd", "1.1.1.2", "2026-03-15T10:01:00Z",
+                     country_code="CN", country_name="China")
+    db.insert_event("ban", "sshd", "2.2.2.2", "2026-03-15T10:02:00Z",
+                     country_code="RU", country_name="Russia")
+    result = db.countries_stats()
+    assert result["total_bans"] == 3
+    assert result["countries"][0]["country_code"] == "CN"
+    assert result["countries"][0]["ban_count"] == 2
+    assert result["countries"][1]["country_code"] == "RU"
+
+
+def test_countries_stats_excludes_null_geo(db):
+    db.insert_event("ban", "sshd", "1.1.1.1", "2026-03-15T10:00:00Z",
+                     country_code="CN", country_name="China")
+    db.insert_event("ban", "sshd", "2.2.2.2", "2026-03-15T10:01:00Z")
+    result = db.countries_stats()
+    assert result["total_bans"] == 1
+    assert len(result["countries"]) == 1
+
+
+# Task 5: Whitelist
+def test_whitelist_add_and_list(db):
+    db.whitelist_add("1.2.3.4")
+    db.whitelist_add("5.6.7.8")
+    ips = db.whitelist_list()
+    assert "1.2.3.4" in ips
+    assert "5.6.7.8" in ips
+
+
+def test_whitelist_add_idempotent(db):
+    db.whitelist_add("1.2.3.4")
+    db.whitelist_add("1.2.3.4")
+    ips = db.whitelist_list()
+    assert ips.count("1.2.3.4") == 1
+
+
+def test_whitelist_remove(db):
+    db.whitelist_add("1.2.3.4")
+    removed = db.whitelist_remove("1.2.3.4")
+    assert removed is True
+    assert "1.2.3.4" not in db.whitelist_list()
+
+
+def test_whitelist_remove_nonexistent(db):
+    removed = db.whitelist_remove("9.9.9.9")
+    assert removed is False
+
+
+def test_whitelist_contains(db):
+    db.whitelist_add("1.2.3.4")
+    assert db.whitelist_contains("1.2.3.4") is True
+    assert db.whitelist_contains("9.9.9.9") is False

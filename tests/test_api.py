@@ -77,6 +77,17 @@ class TestStatus:
         assert resp.status_code == 200
         assert resp.json()["jails"] == {}
 
+    def test_status_includes_capabilities(self, client):
+        resp = client.get("/api/v1/status", headers=auth_headers())
+        data = resp.json()
+        assert "capabilities" in data
+        caps = data["capabilities"]
+        assert "geo" in caps
+        assert "timeline" in caps
+        assert "countries" in caps
+        assert "whitelist" in caps
+        assert "bulk_unban" in caps
+
 
 # --- /api/v1/events ---
 
@@ -110,6 +121,22 @@ class TestEvents:
         assert data["limit"] == 50
         assert data["offset"] == 0
 
+    def test_events_include_geo_fields(self, client, db):
+        db.insert_event("ban", "sshd", "1.2.3.4", "2026-03-15T12:00:00Z",
+                         lat=39.9, lon=116.4, country_code="CN",
+                         country_name="China", city="Beijing")
+        resp = client.get("/api/v1/events", headers=auth_headers())
+        event = resp.json()["events"][0]
+        assert event["lat"] == 39.9
+        assert event["country_code"] == "CN"
+
+    def test_events_geo_fields_nullable(self, client, db):
+        db.insert_event("ban", "sshd", "1.2.3.4", "2026-03-15T12:00:00Z")
+        resp = client.get("/api/v1/events", headers=auth_headers())
+        event = resp.json()["events"][0]
+        assert event["lat"] is None
+        assert event["country_code"] is None
+
 
 # --- /api/v1/stats ---
 
@@ -130,6 +157,94 @@ class TestStats:
         assert "total_bans_24h" in data
         assert "total_bans_7d" in data
         assert data["bans_by_jail"]["sshd"] == 2
+
+
+# --- /api/v1/whitelist ---
+
+class TestWhitelist:
+    def test_whitelist_requires_auth(self, client):
+        assert client.get("/api/v1/whitelist").status_code == 401
+        assert client.post("/api/v1/whitelist", json={"ip": "1.2.3.4"}).status_code == 401
+
+    def test_whitelist_add_and_list(self, client, db):
+        resp = client.post("/api/v1/whitelist", json={"ip": "1.2.3.4"},
+                           headers=auth_headers())
+        assert resp.status_code == 200
+        resp = client.get("/api/v1/whitelist", headers=auth_headers())
+        assert "1.2.3.4" in resp.json()["ips"]
+
+    def test_whitelist_add_idempotent(self, client):
+        client.post("/api/v1/whitelist", json={"ip": "1.2.3.4"}, headers=auth_headers())
+        resp = client.post("/api/v1/whitelist", json={"ip": "1.2.3.4"},
+                           headers=auth_headers())
+        assert resp.status_code == 200
+
+    def test_whitelist_add_validates_ip(self, client):
+        resp = client.post("/api/v1/whitelist", json={"ip": "not-an-ip"},
+                           headers=auth_headers())
+        assert resp.status_code == 422
+
+    def test_whitelist_delete(self, client, db):
+        client.post("/api/v1/whitelist", json={"ip": "1.2.3.4"}, headers=auth_headers())
+        resp = client.delete("/api/v1/whitelist/1.2.3.4", headers=auth_headers())
+        assert resp.status_code == 200
+        resp = client.get("/api/v1/whitelist", headers=auth_headers())
+        assert "1.2.3.4" not in resp.json()["ips"]
+
+    def test_whitelist_delete_nonexistent(self, client):
+        resp = client.delete("/api/v1/whitelist/9.9.9.9", headers=auth_headers())
+        assert resp.status_code == 404
+
+
+# --- /api/v1/stats/countries ---
+
+class TestCountries:
+    def test_countries_requires_auth(self, client):
+        resp = client.get("/api/v1/stats/countries")
+        assert resp.status_code == 401
+
+    def test_countries_returns_data(self, client, db):
+        db.insert_event("ban", "sshd", "1.1.1.1", "2026-03-15T10:00:00Z",
+                         country_code="CN", country_name="China")
+        db.insert_event("ban", "sshd", "2.2.2.2", "2026-03-15T10:01:00Z",
+                         country_code="RU", country_name="Russia")
+        resp = client.get("/api/v1/stats/countries", headers=auth_headers())
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_bans"] == 2
+        assert data["countries"][0]["country_code"] == "CN"
+
+    def test_countries_empty(self, client):
+        resp = client.get("/api/v1/stats/countries", headers=auth_headers())
+        assert resp.status_code == 200
+        assert resp.json()["total_bans"] == 0
+        assert resp.json()["countries"] == []
+
+
+# --- /api/v1/stats/timeline ---
+
+class TestTimeline:
+    def test_timeline_requires_auth(self, client):
+        resp = client.get("/api/v1/stats/timeline")
+        assert resp.status_code == 401
+
+    def test_timeline_default_period(self, client, db):
+        db.insert_event("ban", "sshd", "1.2.3.4", "2026-03-15T12:00:00Z")
+        resp = client.get("/api/v1/stats/timeline", headers=auth_headers())
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["period"] == "24h"
+        assert "buckets" in data
+
+    def test_timeline_7d_period(self, client, db):
+        db.insert_event("ban", "sshd", "1.2.3.4", "2026-03-15T12:00:00Z")
+        resp = client.get("/api/v1/stats/timeline?period=7d", headers=auth_headers())
+        assert resp.status_code == 200
+        assert resp.json()["period"] == "7d"
+
+    def test_timeline_invalid_period(self, client):
+        resp = client.get("/api/v1/stats/timeline?period=1y", headers=auth_headers())
+        assert resp.status_code == 422
 
 
 # --- /api/v1/unban ---
@@ -190,6 +305,84 @@ class TestUnban:
                 headers=auth_headers(),
             )
             assert resp.status_code == 422, f"jail={jail!r} should be invalid"
+
+
+# --- /api/v1/unban/bulk ---
+
+class TestBulkUnban:
+    def test_bulk_unban_requires_auth(self, client):
+        resp = client.post("/api/v1/unban/bulk", json={"entries": []})
+        assert resp.status_code == 401
+
+    def test_bulk_unban_validates_entries(self, client):
+        resp = client.post("/api/v1/unban/bulk",
+                           json={"entries": [{"ip": "not-an-ip", "jail": "sshd"}]},
+                           headers=auth_headers())
+        assert resp.status_code == 422
+
+    def test_bulk_unban_empty_entries(self, client):
+        resp = client.post("/api/v1/unban/bulk",
+                           json={"entries": []},
+                           headers=auth_headers())
+        assert resp.status_code == 200
+        assert resp.json()["results"] == []
+
+    def test_bulk_unban_returns_per_ip_results(self, client):
+        resp = client.post("/api/v1/unban/bulk",
+                           json={"entries": [
+                               {"ip": "1.2.3.4", "jail": "sshd"},
+                               {"ip": "5.6.7.8", "jail": "postfix"},
+                           ]},
+                           headers=auth_headers())
+        assert resp.status_code == 200
+        results = resp.json()["results"]
+        assert len(results) == 2
+        assert results[0]["ip"] == "1.2.3.4"
+        assert "success" in results[0]
+
+
+class TestIntegration:
+    """End-to-end test exercising all new endpoints together."""
+
+    def test_full_workflow(self, client, db):
+        db.insert_event("ban", "sshd", "1.1.1.1", "2026-03-15T10:00:00Z",
+                         country_code="CN", country_name="China", lat=39.9, lon=116.4)
+        db.insert_event("ban", "sshd", "2.2.2.2", "2026-03-15T11:00:00Z",
+                         country_code="RU", country_name="Russia", lat=55.7, lon=37.6)
+        db.insert_event("ban", "postfix", "1.1.1.1", "2026-03-15T12:00:00Z",
+                         country_code="CN", country_name="China", lat=39.9, lon=116.4)
+
+        h = auth_headers()
+
+        # Status has capabilities
+        status = client.get("/api/v1/status", headers=h).json()
+        assert "capabilities" in status
+
+        # Events have geo
+        events = client.get("/api/v1/events", headers=h).json()
+        assert events["events"][0]["country_code"] is not None
+
+        # Timeline has buckets
+        timeline = client.get("/api/v1/stats/timeline?period=24h", headers=h).json()
+        assert timeline["period"] == "24h"
+
+        # Countries aggregated
+        countries = client.get("/api/v1/stats/countries", headers=h).json()
+        assert countries["total_bans"] == 3
+        assert countries["countries"][0]["country_code"] == "CN"
+        assert countries["countries"][0]["ban_count"] == 2
+
+        # Stats have first_seen/last_seen
+        stats = client.get("/api/v1/stats", headers=h).json()
+        assert "first_seen" in stats["top_attackers"][0]
+
+        # Whitelist CRUD
+        client.post("/api/v1/whitelist", json={"ip": "1.1.1.1"}, headers=h)
+        wl = client.get("/api/v1/whitelist", headers=h).json()
+        assert "1.1.1.1" in wl["ips"]
+        client.delete("/api/v1/whitelist/1.1.1.1", headers=h)
+        wl = client.get("/api/v1/whitelist", headers=h).json()
+        assert "1.1.1.1" not in wl["ips"]
 
 
 class TestPathPrefix:
