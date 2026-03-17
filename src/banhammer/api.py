@@ -289,7 +289,13 @@ def create_app(
                         )
                 except Exception:
                     logger.warning("Failed to apply whitelist to fail2ban for %s", ip)
-            await asyncio.to_thread(_apply_whitelist_add, req.ip, poller)
+            try:
+                await asyncio.wait_for(
+                    asyncio.to_thread(_apply_whitelist_add, req.ip, poller),
+                    timeout=60.0,
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Whitelist apply to fail2ban timed out for %s", req.ip)
         return {"status": "ok"}
 
     @app.delete(f"{prefix}/api/v1/whitelist/{{ip}}")
@@ -312,7 +318,13 @@ def create_app(
                         )
                 except Exception:
                     logger.warning("Failed to remove whitelist from fail2ban for %s", ip_addr)
-            await asyncio.to_thread(_apply_whitelist_delete, ip, poller)
+            try:
+                await asyncio.wait_for(
+                    asyncio.to_thread(_apply_whitelist_delete, ip, poller),
+                    timeout=60.0,
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Whitelist delete from fail2ban timed out for %s", ip)
         return {"status": "ok"}
 
     @app.get(f"{prefix}/api/v1/stats/countries")
