@@ -133,10 +133,51 @@ location /x7k9m2p4q8w1/ {
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
+
+    # Keep WebSocket connections alive (default 60s would drop idle connections)
+    proxy_read_timeout 86400;
+    proxy_send_timeout 86400;
 }
 ```
 
 Replace `x7k9m2p4q8w1` with the `path_prefix` from your config. The app URL becomes `https://your-existing-domain.com/x7k9m2p4q8w1`.
+
+### Cloudflare
+
+**Do not proxy the agent endpoint through Cloudflare's orange-cloud.** Cloudflare forces HTTP/2 on proxied connections, but WebSocket over HTTP/2 (RFC 8441) is not supported by iOS `URLSessionWebSocketTask` — the connection silently fails with a 404. The BanHammer app will fall back to polling instead of receiving live events.
+
+**Workaround:** Create a dedicated DNS subdomain for the agent and set it to **grey-cloud** (DNS-only, no proxy):
+
+```
+agent.yourdomain.com  →  your-server-ip  (grey cloud, DNS only)
+```
+
+Add a separate nginx `server` block for this subdomain with a Let's Encrypt certificate:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name agent.yourdomain.com;
+
+    ssl_certificate /etc/letsencrypt/live/agent.yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/agent.yourdomain.com/privkey.pem;
+
+    location /x7k9m2p4q8w1/ {
+        proxy_pass http://127.0.0.1:8443/x7k9m2p4q8w1/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+    }
+}
+```
+
+Your main domain (`yourdomain.com`) can keep the orange-cloud proxy. Only the agent subdomain needs to bypass Cloudflare.
 
 ### Direct HTTPS (no Nginx)
 

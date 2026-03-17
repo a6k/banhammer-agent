@@ -366,9 +366,13 @@ def create_app(
         await ws_manager.connect(websocket)
         try:
             while True:
-                await websocket.receive_text()
+                data = await websocket.receive()
+                if data.get("type") == "websocket.disconnect":
+                    break
         except WebSocketDisconnect:
             pass
+        except Exception as e:
+            logger.warning("WebSocket receive error: %s", e)
         finally:
             await ws_manager.disconnect(websocket)
 
