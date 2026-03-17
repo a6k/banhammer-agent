@@ -149,6 +149,7 @@ class Agent:
             host=self.config["api"]["bind"],
             port=self.config["api"]["port"],
             log_level="info",
+            access_log=False,
         )
 
         # Add TLS if configured

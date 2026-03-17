@@ -6,6 +6,8 @@ from fastapi import WebSocket
 
 logger = logging.getLogger("banhammer")
 
+MAX_WS_CLIENTS = 10
+
 
 class WebSocketManager:
     def __init__(self):
@@ -13,8 +15,11 @@ class WebSocketManager:
         self._lock = asyncio.Lock()
 
     async def connect(self, ws: WebSocket):
-        await ws.accept()
         async with self._lock:
+            if len(self._clients) >= MAX_WS_CLIENTS:
+                await ws.close(code=4008, reason="Too many connections")
+                return
+            await ws.accept()
             self._clients.append(ws)
         logger.info("WebSocket client connected (%d total)", len(self._clients))
 
