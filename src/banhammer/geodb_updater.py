@@ -43,7 +43,7 @@ def download_geodb(license_key: str, db_path: str) -> bool:
             for member in tar.getmembers():
                 if member.name.endswith(".mmdb"):
                     member.name = os.path.basename(member.name)
-                    tar.extract(member, path=os.path.dirname(db_path))
+                    tar.extract(member, path=os.path.dirname(db_path), filter="data")
                     extracted = os.path.join(os.path.dirname(db_path), member.name)
 
                     if os.path.exists(db_path):
@@ -57,7 +57,8 @@ def download_geodb(license_key: str, db_path: str) -> bool:
         return True
 
     except Exception as e:
-        logger.warning("Failed to update GeoLite2 database: %s", e)
+        # Avoid logging the URL which contains the license key as a query parameter
+        logger.warning("Failed to update GeoLite2 database: %s", type(e).__name__)
         return False
 
 

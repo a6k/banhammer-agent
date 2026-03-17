@@ -13,7 +13,7 @@ ProtectHome=yes
 PrivateTmp=yes
 ReadWritePaths=/var/lib/banhammer /etc/banhammer
 LockPersonality=yes
-CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SETUID CAP_SETGID
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 
 [Install]
