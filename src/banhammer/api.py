@@ -66,7 +66,7 @@ class BulkUnbanEntry(BaseModel):
 
 
 class BulkUnbanRequest(BaseModel):
-    entries: list[BulkUnbanEntry] = Field(..., max_length=100)
+    entries: list[BulkUnbanEntry] = Field(..., max_length=25)
 
 
 class WhitelistRequest(BaseModel):
@@ -329,7 +329,13 @@ def create_app(
 
     @app.post(f"{prefix}/api/v1/unban/bulk")
     async def unban_bulk(req: BulkUnbanRequest, _=Depends(verify_api_key)):
-        results = await asyncio.to_thread(_do_bulk_unban, req.entries, poller)
+        try:
+            results = await asyncio.wait_for(
+                asyncio.to_thread(_do_bulk_unban, req.entries, poller),
+                timeout=30.0,
+            )
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="Bulk unban timed out")
         return {"results": results}
 
     @app.post(f"{prefix}/api/v1/unban")
