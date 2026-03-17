@@ -238,7 +238,7 @@ retention_days = 90    # Auto-delete old events
 
 ## Security
 
-The agent has been through 4 independent security audits. Key hardening:
+The agent has been through 5 independent security audits. Key hardening:
 
 - Runs as dedicated `banhammer` user (not root)
 - API key with constant-time comparison (`hmac.compare_digest`)
