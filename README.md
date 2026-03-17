@@ -88,6 +88,8 @@ Open the BanHammer app, add your server with the URL (including path prefix) and
 - **Country stats** — ban counts by country for geographic analysis
 - **Whitelist management** — add/remove IPs from the Fail2Ban ignore list
 - **Bulk unban** — unban multiple IPs in one request
+- **WebSocket real-time** — instant ban events via WebSocket, no polling delay
+- **GeoLite2 auto-update** — automatic database refresh when older than 30 days
 - **Capability advertisement** — the app auto-detects supported features
 
 ## API
@@ -107,8 +109,10 @@ The agent serves a REST API on port 8443 (configurable). All endpoints are prefi
 | GET | `/{prefix}/api/v1/whitelist` | API-Key | List whitelisted IPs |
 | POST | `/{prefix}/api/v1/whitelist` | API-Key | Add IP to whitelist (also unbans) |
 | DELETE | `/{prefix}/api/v1/whitelist/{ip}` | API-Key | Remove IP from whitelist |
+| WS | `/{prefix}/api/v1/ws?token=KEY` | Token | WebSocket for real-time events |
 
 Auth header: `Authorization: Bearer bh_your_api_key`
+WebSocket auth: `?token=bh_your_api_key` (query parameter, since WebSocket doesn't support headers)
 
 ## Deployment
 
@@ -124,6 +128,11 @@ location /x7k9m2p4q8w1/ {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
+
+    # WebSocket support
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
 }
 ```
 
@@ -153,6 +162,22 @@ For IP-to-location enrichment (map pins, country stats):
 ```toml
 [geo]
 geoip_db_path = "/var/lib/banhammer/GeoLite2-City.mmdb"
+```
+
+### Auto-Update (recommended)
+
+Add your MaxMind license key to enable automatic updates when the DB is older than 30 days:
+
+```toml
+[geo]
+geoip_db_path = "/var/lib/banhammer/GeoLite2-City.mmdb"
+maxmind_license_key = "your_key_here"
+```
+
+The agent checks the DB age at startup and downloads a fresh copy automatically. You can also trigger a manual update:
+
+```bash
+banhammer-agent update-geodb
 ```
 
 ### Option B: ip-api.com fallback (simple, but sends IPs in plaintext)
@@ -197,6 +222,7 @@ retention_days = 90    # Auto-delete old events
 
 [geo]
 # geoip_db_path = "/var/lib/banhammer/GeoLite2-City.mmdb"
+# maxmind_license_key = "your_key"  # enables auto-update
 # allow_http_fallback = false
 ```
 
@@ -208,6 +234,7 @@ retention_days = 90    # Auto-delete old events
 | `banhammer-agent run` | Start monitoring + API server |
 | `banhammer-agent status` | Show local DB stats and API status |
 | `banhammer-agent backfill-geo` | Enrich existing events with geo data |
+| `banhammer-agent update-geodb` | Download/update GeoLite2 database |
 
 ## Security
 
@@ -223,6 +250,7 @@ The agent has been through 4 independent security audits. Key hardening:
 - IP and jail name validation at every boundary
 - Log paths validated and restricted to `/var/log/`
 - GeoIP HTTP fallback is opt-in with security warning
+- WebSocket token validation with constant-time comparison
 - Dependencies pinned with hashes in `requirements.lock`
 
 ## Requirements
