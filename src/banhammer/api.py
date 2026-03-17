@@ -10,7 +10,7 @@ import time
 from importlib.metadata import version as pkg_version
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field, field_validator
@@ -173,6 +173,7 @@ def create_app(
     poller=None,
     path_prefix: str = "",
     geo_service=None,
+    ws_manager=None,
 ) -> FastAPI:
     app = FastAPI(title="BanHammer Agent", docs_url=None, redoc_url=None)
     prefix = path_prefix.rstrip("/") if path_prefix else ""
@@ -191,6 +192,10 @@ def create_app(
         except Exception:
             logger.debug("Could not resolve server location")
     rate_limiter = RateLimiter(max_requests=10, window_seconds=1.0)
+
+    caps = ["geo", "timeline", "countries", "whitelist", "bulk_unban"]
+    if ws_manager is not None:
+        caps.append("websocket")
 
     def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)):
         # HIGH-3: Use constant-time comparison for API key
@@ -223,7 +228,7 @@ def create_app(
             "version": _get_version(),
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "jails": latest or {},
-            "capabilities": ["geo", "timeline", "countries", "whitelist", "bulk_unban"],
+            "capabilities": caps,
         }
         if _server_location:
             result["server_lat"] = _server_location["lat"]
@@ -349,5 +354,22 @@ def create_app(
             raise HTTPException(status_code=504, detail="fail2ban-client timed out")
         except FileNotFoundError:
             raise HTTPException(status_code=503, detail="fail2ban-client not found")
+
+    @app.websocket(f"{prefix}/api/v1/ws")
+    async def websocket_endpoint(websocket: WebSocket, token: str = ""):
+        if not token or not hmac.compare_digest(token, api_key):
+            await websocket.close(code=4001, reason="Invalid token")
+            return
+        if ws_manager is None:
+            await websocket.close(code=4002, reason="WebSocket not available")
+            return
+        await ws_manager.connect(websocket)
+        try:
+            while True:
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            pass
+        finally:
+            await ws_manager.disconnect(websocket)
 
     return app

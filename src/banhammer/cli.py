@@ -20,6 +20,7 @@ from banhammer.geo import GeoIPService
 from banhammer.log_tailer import LogTailer
 from banhammer.models import BanEvent
 from banhammer.poller import Poller
+from banhammer.websocket import WebSocketManager
 
 logger = logging.getLogger("banhammer")
 
@@ -46,6 +47,8 @@ class Agent:
         self.server_id = config["agent"]["server_id"]
         self._last_poll = 0.0
         self._last_heartbeat = 0.0
+        self.ws_manager = WebSocketManager()
+        self._loop = None
 
     def _monitor_once(self):
         """Run one monitoring cycle: tail log + poll fail2ban."""
@@ -73,6 +76,19 @@ class Agent:
                 timestamp=event["timestamp"].isoformat(),
                 **geo_kwargs,
             )
+            # Broadcast new event via WebSocket
+            if self.ws_manager.client_count > 0 and self._loop:
+                event_data = {
+                    "type": event["type"],
+                    "jail": event["jail"],
+                    "ip": event["ip"],
+                    "timestamp": event["timestamp"].isoformat(),
+                }
+                if geo:
+                    event_data.update(geo)
+                asyncio.run_coroutine_threadsafe(
+                    self.ws_manager.broadcast("ban_event", event_data), self._loop
+                )
 
         # Poll fail2ban-client periodically
         if now - self._last_poll >= poll_interval:
@@ -80,6 +96,11 @@ class Agent:
                 jails = self.poller.poll()
                 self.db.save_status(jails)
                 self._last_poll = now
+                # Broadcast status update via WebSocket
+                if self.ws_manager.client_count > 0 and self._loop:
+                    asyncio.run_coroutine_threadsafe(
+                        self.ws_manager.broadcast("status_update", jails), self._loop
+                    )
             except Exception:
                 logger.warning("Polling fail2ban-client failed", exc_info=True)
 
@@ -101,6 +122,7 @@ class Agent:
     async def run_async(self):
         """Start monitoring loop + FastAPI server concurrently."""
         self.running = True
+        self._loop = asyncio.get_event_loop()
 
         # Create FastAPI app
         app = create_app(
@@ -110,6 +132,7 @@ class Agent:
             poller=self.poller,
             path_prefix=self.config["api"].get("path_prefix", ""),
             geo_service=self.geo,
+            ws_manager=self.ws_manager,
         )
 
         # Configure uvicorn
