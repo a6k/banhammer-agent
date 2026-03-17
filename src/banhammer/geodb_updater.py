@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 import tarfile
+import tempfile
 import time
 from pathlib import Path
 
@@ -35,24 +36,27 @@ def download_geodb(license_key: str, db_path: str) -> bool:
         )
         resp.raise_for_status()
 
-        tmp_path = db_path + ".download.tar.gz"
-        with open(tmp_path, "wb") as f:
-            f.write(resp.content)
+        dest_dir = os.path.dirname(db_path)
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=dest_dir, suffix=".tar.gz")
+        try:
+            with os.fdopen(tmp_fd, "wb") as f:
+                f.write(resp.content)
 
-        with tarfile.open(tmp_path, "r:gz") as tar:
-            for member in tar.getmembers():
-                if member.name.endswith(".mmdb"):
-                    member.name = os.path.basename(member.name)
-                    tar.extract(member, path=os.path.dirname(db_path), filter="data")
-                    extracted = os.path.join(os.path.dirname(db_path), member.name)
+            with tarfile.open(tmp_path, "r:gz") as tar:
+                for member in tar.getmembers():
+                    if member.name.endswith(".mmdb"):
+                        member.name = os.path.basename(member.name)
+                        tar.extract(member, path=dest_dir, filter="data")
+                        extracted = os.path.join(dest_dir, member.name)
 
-                    if os.path.exists(db_path):
-                        shutil.copy2(db_path, db_path + ".bak")
+                        if os.path.exists(db_path):
+                            shutil.copy2(db_path, db_path + ".bak")
 
-                    shutil.move(extracted, db_path)
-                    break
-
-        os.unlink(tmp_path)
+                        shutil.move(extracted, db_path)
+                        break
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
         logger.info("GeoLite2-City database updated: %s", db_path)
         return True
 

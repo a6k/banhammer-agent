@@ -186,9 +186,10 @@ def create_app(
             import httpx as _httpx
             resp = _httpx.get("https://api.ipify.org", timeout=5.0)
             public_ip = resp.text.strip()
+            ipaddress.ip_address(public_ip)  # validate before use
             _server_location = geo_service.lookup(public_ip)
             if _server_location:
-                logger.info("Server location resolved: %s (%s)", public_ip, _server_location.get("city"))
+                logger.info("Server location resolved (%s)", _server_location.get("city"))
         except Exception:
             logger.debug("Could not resolve server location")
     rate_limiter = RateLimiter(max_requests=10, window_seconds=1.0)
