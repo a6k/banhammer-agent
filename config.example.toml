@@ -28,3 +28,4 @@ retention_days = 90
 # SECURITY WARNING: HTTP fallback sends banned IPs in plaintext to ip-api.com
 # Only enable if you accept the risk or have no GeoLite2 database
 # allow_http_fallback = false
+# maxmind_license_key = "your_key_here"  # enables auto-update of GeoLite2 DB

@@ -20,6 +20,7 @@ from banhammer.geo import GeoIPService
 from banhammer.log_tailer import LogTailer
 from banhammer.models import BanEvent
 from banhammer.poller import Poller
+from banhammer.geodb_updater import check_and_update, download_geodb
 from banhammer.websocket import WebSocketManager
 
 logger = logging.getLogger("banhammer")
@@ -123,6 +124,13 @@ class Agent:
         """Start monitoring loop + FastAPI server concurrently."""
         self.running = True
         self._loop = asyncio.get_event_loop()
+
+        # Auto-update GeoLite2 DB if needed
+        geo_config = self.config.get("geo", {})
+        db_path = geo_config.get("geoip_db_path")
+        license_key = geo_config.get("maxmind_license_key")
+        if db_path:
+            await asyncio.to_thread(check_and_update, db_path, license_key)
 
         # Create FastAPI app
         app = create_app(
@@ -295,6 +303,24 @@ def cmd_backfill(args):
     print(f"Backfill complete: {updated}/{total} events enriched with geo data")
 
 
+def cmd_update_geodb(args):
+    config = load_config(args.config)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+    geo_config = config.get("geo", {})
+    db_path = geo_config.get("geoip_db_path")
+    license_key = geo_config.get("maxmind_license_key")
+    if not db_path:
+        print("Error: geo.geoip_db_path not configured")
+        return
+    if not license_key:
+        print("Error: geo.maxmind_license_key not configured")
+        return
+    if download_geodb(license_key, db_path):
+        print(f"GeoLite2 database updated: {db_path}")
+    else:
+        print("Failed to update GeoLite2 database")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="banhammer-agent",
@@ -311,6 +337,7 @@ def main():
     subparsers.add_parser("init", help="Initialize configuration")
     subparsers.add_parser("status", help="Show agent status")
     subparsers.add_parser("backfill-geo", help="Backfill geo data for existing events")
+    subparsers.add_parser("update-geodb", help="Download/update GeoLite2 database")
 
     args = parser.parse_args()
 
@@ -319,6 +346,7 @@ def main():
         "init": cmd_init,
         "status": cmd_status,
         "backfill-geo": cmd_backfill,
+        "update-geodb": cmd_update_geodb,
     }
     commands[args.command](args)
 
