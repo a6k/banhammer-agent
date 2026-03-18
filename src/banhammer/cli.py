@@ -172,7 +172,7 @@ class Agent:
         # Handle shutdown signals
         loop = asyncio.get_event_loop()
         for sig in (signal.SIGTERM, signal.SIGINT):
-            loop.add_signal_handler(sig, lambda: self._shutdown(server))
+            loop.add_signal_handler(sig, lambda s=server: self._shutdown(s))
 
         logger.info(
             "API server starting on %s:%d",

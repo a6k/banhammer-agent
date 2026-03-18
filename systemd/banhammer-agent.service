@@ -8,6 +8,7 @@ Group=banhammer
 ExecStart=/opt/banhammer-agent/.venv/bin/banhammer-agent run
 Restart=on-failure
 RestartSec=5
+UMask=0077
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
