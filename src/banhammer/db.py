@@ -154,13 +154,13 @@ class EventDB:
             for r in rows
         ]
 
-    def get_events_missing_geo(self, limit: int = 500) -> list[tuple[int, str]]:
+    def get_events_missing_geo(self, limit: int = 500, min_id: int = 0) -> list[tuple[int, str]]:
         """Return (id, ip) for events where country_code IS NULL, in batches."""
         with self._lock:
             with self._connect() as conn:
                 rows = conn.execute(
-                    "SELECT id, ip FROM ban_events WHERE country_code IS NULL LIMIT ?",
-                    (limit,),
+                    "SELECT id, ip FROM ban_events WHERE country_code IS NULL AND id > ? ORDER BY id ASC LIMIT ?",
+                    (min_id, limit),
                 ).fetchall()
         return [(r[0], r[1]) for r in rows]
 

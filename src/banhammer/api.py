@@ -3,7 +3,6 @@ import hmac
 import ipaddress
 import logging
 import re
-import socket
 import subprocess
 import threading
 import time
@@ -231,7 +230,7 @@ def create_app(
         latest = db.get_latest_status()
         result = {
             "server_id": server_id,
-            "hostname": socket.gethostname(),
+            "hostname": server_id,
             "version": _get_version(),
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "jails": latest or {},
@@ -390,6 +389,7 @@ def create_app(
 
     @app.websocket(f"{prefix}/api/v1/ws")
     async def websocket_endpoint(websocket: WebSocket, token: str = ""):
+        await websocket.accept()
         if not token or not hmac.compare_digest(token, api_key):
             await websocket.close(code=4001, reason="Invalid token")
             return

@@ -260,9 +260,7 @@ def cmd_init(args):
         raise
     print(f"Config written to {config_file}")
     print(f"Data directory: {data_dir}")
-    print(f"API Key: {api_key}")
-    print("⚠  Store this key securely — it will not be shown again.")
-    print(f"Path prefix: {path_prefix}")
+    print(f"API key and path prefix written to {config_file} (readable only by root).")
     print(f"Agent API will be available at https://your-server{path_prefix}/api/v1/health")
     print("Start the agent with: banhammer-agent run")
 
@@ -294,17 +292,17 @@ def cmd_backfill(args):
         allow_http_fallback=geo_config.get("allow_http_fallback", False),
     )
 
-    # Fix 4: Process in batches to avoid OOM
+    # Process in batches with cursor-based pagination to avoid OOM and skipping
     BATCH = 500
     total = 0
     updated = 0
+    cursor = 0
     while True:
-        rows = db_inst.get_events_missing_geo(limit=BATCH)
+        rows = db_inst.get_events_missing_geo(limit=BATCH, min_id=cursor)
         if not rows:
             break
         total += len(rows)
         logger.info("Processing batch of %d events (%d total so far)", len(rows), total)
-        updated_this_batch = 0
         for event_id, ip in rows:
             result = geo.lookup(ip)
             if result:
@@ -314,10 +312,7 @@ def cmd_backfill(args):
                     country_name=result["country_name"], city=result["city"],
                 )
                 updated += 1
-                updated_this_batch += 1
-        if updated_this_batch == 0:
-            logger.info("No geo resolutions in this batch — remaining %d events cannot be resolved", len(rows))
-            break
+            cursor = max(cursor, event_id)
 
     logger.info("Backfill complete: %d/%d events enriched", updated, total)
     print(f"Backfill complete: {updated}/{total} events enriched with geo data")
