@@ -65,6 +65,7 @@ def download_geodb(license_key: str, db_path: str) -> bool:
                             os.chmod(db_path + ".bak", 0o600)
 
                         shutil.move(extracted, db_path)
+                        os.chmod(db_path, 0o600)
                         break
         finally:
             if os.path.exists(tmp_path):

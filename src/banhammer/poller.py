@@ -190,7 +190,8 @@ class Poller:
 
     def _grep_journal(self, match_parts: list[str], ip: str, max_lines: int) -> list[str]:
         try:
-            cmd = ["journalctl", "--no-pager", "-n", "500", "--output", "short-iso", "--"]
+            cmd = ["journalctl", "--no-pager", "-n", "500", "--output", "short-iso",
+                   "--since", "24 hours ago", "--"]
             for part in match_parts:
                 cmd.append(part)
             result = subprocess.run(
