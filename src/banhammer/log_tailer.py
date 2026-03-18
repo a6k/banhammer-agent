@@ -110,7 +110,7 @@ class LogTailer:
                 return
 
         try:
-            with open(self.log_path, "r") as f:
+            with open(self.log_path, "r", encoding="utf-8", errors="replace") as f:
                 f.seek(self._position)
                 for line in f:
                     event = parse_fail2ban_line(line)

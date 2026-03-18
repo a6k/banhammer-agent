@@ -186,6 +186,8 @@ class Agent:
         )
 
     def _shutdown(self, server):
+        if not self.running:
+            return  # Already shutting down — prevent double geo.close() on double signal
         logger.info("Shutdown signal received")
         self.running = False
         self.geo.close()

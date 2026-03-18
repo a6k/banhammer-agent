@@ -138,6 +138,15 @@ location /x7k9m2p4q8w1/ {
     proxy_read_timeout 86400;
     proxy_send_timeout 86400;
 }
+
+# IMPORTANT: Use $uri instead of $request_uri in your nginx log format.
+# The WebSocket endpoint authenticates via a ?token= query parameter.
+# $request_uri includes the query string, which would write the API key
+# to /var/log/nginx/access.log in plaintext.
+#
+# In your nginx.conf or site config:
+# log_format banhammer '$remote_addr - [$time_local] "$request_method $uri $server_protocol" $status $body_bytes_sent';
+# access_log /var/log/nginx/access.log banhammer;
 ```
 
 Replace `x7k9m2p4q8w1` with the `path_prefix` from your config. The app URL becomes `https://your-existing-domain.com/x7k9m2p4q8w1`.

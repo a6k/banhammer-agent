@@ -245,7 +245,7 @@ def create_app(
     @app.get(f"{prefix}/api/v1/events")
     async def events(
         limit: Annotated[int, Query(ge=1, le=500)] = 50,
-        offset: Annotated[int, Query(ge=0, le=1_000_000)] = 0,
+        offset: Annotated[int, Query(ge=0, le=10_000)] = 0,
         _=Depends(verify_api_key),
     ):
         total = db.count_events()
