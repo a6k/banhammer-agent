@@ -62,6 +62,7 @@ def download_geodb(license_key: str, db_path: str) -> bool:
 
                         if os.path.exists(db_path):
                             shutil.copy2(db_path, db_path + ".bak")
+                            os.chmod(db_path + ".bak", 0o600)
 
                         shutil.move(extracted, db_path)
                         break

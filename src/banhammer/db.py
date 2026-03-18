@@ -15,13 +15,14 @@ class EventDB:
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
-        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=5000")
         conn.execute("PRAGMA foreign_keys=ON")
         return conn
 
     def _init_db(self):
         with self._lock:
             with self._connect() as conn:
+                conn.execute("PRAGMA journal_mode=WAL")
                 conn.execute(
                     """CREATE TABLE IF NOT EXISTS ban_events (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,8 +69,6 @@ class EventDB:
                 }
                 for col, col_type in _ALLOWED_MIGRATION_COLS.items():
                     if col not in existing_cols:
-                        assert col in _ALLOWED_MIGRATION_COLS and col_type == _ALLOWED_MIGRATION_COLS[col], \
-                            f"Unexpected migration column: {col} {col_type}"
                         conn.execute(f"ALTER TABLE ban_events ADD COLUMN {col} {col_type}")
 
     def _insert_with_timestamp(

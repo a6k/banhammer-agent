@@ -150,6 +150,19 @@ def load_config(path: str) -> dict:
             "must match /segment format (e.g. /abc123)"
         )
 
+    # Validate numeric ranges
+    poll_interval = config["agent"]["poll_interval"]
+    if not isinstance(poll_interval, int) or poll_interval < 5:
+        raise ValueError("agent.poll_interval must be an integer >= 5")
+
+    retention_days = config["storage"]["retention_days"]
+    if not isinstance(retention_days, int) or retention_days < 1:
+        raise ValueError("storage.retention_days must be an integer >= 1")
+
+    port = config["api"]["port"]
+    if not isinstance(port, int) or not (1 <= port <= 65535):
+        raise ValueError("api.port must be an integer between 1 and 65535")
+
     # Server ID defaults to hostname
     config["agent"].setdefault("server_id", socket.gethostname())
 

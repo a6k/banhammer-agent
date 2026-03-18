@@ -19,7 +19,6 @@ from banhammer.config import load_config
 from banhammer.db import EventDB
 from banhammer.geo import GeoIPService
 from banhammer.log_tailer import LogTailer
-from banhammer.models import BanEvent
 from banhammer.poller import Poller
 from banhammer.geodb_updater import check_and_update, download_geodb
 from banhammer.websocket import WebSocketManager

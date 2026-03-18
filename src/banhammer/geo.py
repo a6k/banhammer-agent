@@ -70,12 +70,13 @@ class GeoIPService:
                 except Exception:
                     pass
 
-            # Store in cache
+            # Store in cache — re-check cap after potential eviction by another thread
             with self._cache_lock:
                 if len(self._cache) >= self._max_cache:
                     for key in list(self._cache.keys())[:1000]:
                         del self._cache[key]
-                self._cache[ip] = result
+                if len(self._cache) < self._max_cache:
+                    self._cache[ip] = result
             return result
         finally:
             with self._in_flight_lock:
