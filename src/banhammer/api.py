@@ -295,7 +295,11 @@ def create_app(
                     timeout=60.0,
                 )
             except asyncio.TimeoutError:
-                logger.warning("Whitelist apply to fail2ban timed out for %s", req.ip)
+                logger.warning(
+                    "Whitelist apply to fail2ban timed out for %s — "
+                    "IP is saved in DB whitelist but may not be fully applied to all jails",
+                    req.ip,
+                )
         return {"status": "ok"}
 
     @app.delete(f"{prefix}/api/v1/whitelist/{{ip}}")
@@ -324,7 +328,11 @@ def create_app(
                     timeout=60.0,
                 )
             except asyncio.TimeoutError:
-                logger.warning("Whitelist delete from fail2ban timed out for %s", ip)
+                logger.warning(
+                    "Whitelist delete from fail2ban timed out for %s — "
+                    "IP is removed from DB whitelist but may still be in some jail ignore lists",
+                    ip,
+                )
         return {"status": "ok"}
 
     @app.get(f"{prefix}/api/v1/stats/countries")

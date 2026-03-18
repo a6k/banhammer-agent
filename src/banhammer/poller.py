@@ -90,6 +90,9 @@ class Poller:
 
     def poll(self) -> dict:
         jails = self.get_jail_list()
+        MAX_JAILS = 50
+        if len(jails) > MAX_JAILS:
+            jails = jails[:MAX_JAILS]
         jail_data = {}
         MAX_LOOKUP_IPS = 20
         for jail in jails:

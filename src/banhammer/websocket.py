@@ -7,6 +7,7 @@ from fastapi import WebSocket
 logger = logging.getLogger("banhammer")
 
 MAX_WS_CLIENTS = 10
+_SEND_TIMEOUT = 5.0
 
 
 class WebSocketManager:
@@ -31,15 +32,24 @@ class WebSocketManager:
 
     async def broadcast(self, message_type: str, data: dict):
         payload = json.dumps({"type": message_type, "data": data})
+
+        # Snapshot client list outside the lock so slow sends don't block
+        # connect/disconnect from acquiring it.
         async with self._lock:
-            dead = []
-            for client in self._clients:
-                try:
-                    await client.send_text(payload)
-                except Exception:
-                    dead.append(client)
-            for client in dead:
-                self._clients.remove(client)
+            clients = list(self._clients)
+
+        dead = []
+        for client in clients:
+            try:
+                await asyncio.wait_for(client.send_text(payload), timeout=_SEND_TIMEOUT)
+            except Exception:
+                dead.append(client)
+
+        if dead:
+            async with self._lock:
+                for client in dead:
+                    if client in self._clients:
+                        self._clients.remove(client)
 
     @property
     def client_count(self) -> int:

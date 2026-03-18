@@ -24,23 +24,34 @@ def db_age_days(db_path: str) -> float | None:
 def download_geodb(license_key: str, db_path: str) -> bool:
     try:
         logger.info("Downloading GeoLite2-City database...")
-        resp = httpx.get(
-            MAXMIND_URL,
-            params={
-                "edition_id": EDITION,
-                "license_key": license_key,
-                "suffix": "tar.gz",
-            },
-            timeout=60.0,
-            follow_redirects=True,
-        )
-        resp.raise_for_status()
-
         dest_dir = os.path.dirname(db_path)
         tmp_fd, tmp_path = tempfile.mkstemp(dir=dest_dir, suffix=".tar.gz")
         try:
-            with os.fdopen(tmp_fd, "wb") as f:
-                f.write(resp.content)
+            _MAX_DOWNLOAD_BYTES = 200 * 1024 * 1024  # 200 MB hard cap
+            _downloaded = 0
+            # Close the raw fd first so we can reopen via path; avoids fd
+            # leak if the httpx.stream context raises before fdopen.
+            os.close(tmp_fd)
+            with httpx.stream(
+                "GET",
+                MAXMIND_URL,
+                params={
+                    "edition_id": EDITION,
+                    "license_key": license_key,
+                    "suffix": "tar.gz",
+                },
+                timeout=60.0,
+                follow_redirects=True,
+            ) as resp:
+                resp.raise_for_status()
+                with open(tmp_path, "wb") as f:
+                    for chunk in resp.iter_bytes(chunk_size=65536):
+                        _downloaded += len(chunk)
+                        if _downloaded > _MAX_DOWNLOAD_BYTES:
+                            raise ValueError(
+                                f"GeoLite2 download exceeded {_MAX_DOWNLOAD_BYTES // (1024*1024)} MB limit"
+                            )
+                        f.write(chunk)
 
             with tarfile.open(tmp_path, "r:gz") as tar:
                 for member in tar.getmembers():

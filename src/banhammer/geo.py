@@ -105,12 +105,19 @@ class GeoIPService:
         data = resp.json()
         if data.get("status") != "success":
             return None
+        try:
+            lat = float(data["lat"])
+            lon = float(data["lon"])
+        except (TypeError, ValueError, KeyError):
+            return None
+        if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
+            return None
         return {
-            "lat": data["lat"],
-            "lon": data["lon"],
-            "country_code": data["countryCode"],
-            "country_name": data["country"],
-            "city": data.get("city"),
+            "lat": lat,
+            "lon": lon,
+            "country_code": str(data.get("countryCode", ""))[:2],
+            "country_name": str(data.get("country", ""))[:100],
+            "city": str(data["city"])[:100] if data.get("city") else None,
         }
 
     def close(self):
