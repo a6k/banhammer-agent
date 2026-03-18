@@ -95,14 +95,19 @@ class Poller:
             jails = jails[:MAX_JAILS]
         jail_data = {}
         MAX_LOOKUP_IPS = 20
+        MAX_DETAIL_LINES_TOTAL = 100  # hard cap: total log lines across all IPs per jail
         for jail in jails:
             status = self.get_jail_status(jail)
             # Look up log context for each banned IP
             ip_details = {}
+            total_lines = 0
             for ip in status["banned_ips"][:MAX_LOOKUP_IPS]:
+                if total_lines >= MAX_DETAIL_LINES_TOTAL:
+                    break
                 try:
                     log_lines = self.lookup_ip(jail, ip, max_lines=5)
                     ip_details[ip] = log_lines
+                    total_lines += len(log_lines)
                 except Exception:
                     ip_details[ip] = []
 
