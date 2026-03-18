@@ -166,6 +166,24 @@ def _do_bulk_unban(entries, poller_ref):
     return results
 
 
+def resolve_server_location(geo_service) -> "dict | None":
+    """Resolve the server's own public IP and look up its geo location.
+    Runs synchronously — call via asyncio.to_thread() to avoid blocking
+    the event loop."""
+    try:
+        import httpx as _httpx
+        resp = _httpx.get("https://api.ipify.org", timeout=5.0)
+        public_ip = resp.text.strip()
+        ipaddress.ip_address(public_ip)  # validate before use
+        location = geo_service.lookup(public_ip)
+        if location:
+            logger.info("Server location resolved (%s)", location.get("city"))
+        return location
+    except Exception:
+        logger.debug("Could not resolve server location")
+        return None
+
+
 def create_app(
     db: EventDB,
     server_id: str,
@@ -174,24 +192,12 @@ def create_app(
     path_prefix: str = "",
     geo_service=None,
     ws_manager=None,
+    server_location: "dict | None" = None,
 ) -> FastAPI:
     app = FastAPI(title="BanHammer Agent", docs_url=None, redoc_url=None)
     prefix = path_prefix.rstrip("/") if path_prefix else ""
 
-    # Resolve server's own location once at startup
-    _server_location: dict | None = None
-    if geo_service:
-        try:
-            # Get public IP via external service
-            import httpx as _httpx
-            resp = _httpx.get("https://api.ipify.org", timeout=5.0)
-            public_ip = resp.text.strip()
-            ipaddress.ip_address(public_ip)  # validate before use
-            _server_location = geo_service.lookup(public_ip)
-            if _server_location:
-                logger.info("Server location resolved (%s)", _server_location.get("city"))
-        except Exception:
-            logger.debug("Could not resolve server location")
+    _server_location = server_location
     rate_limiter = RateLimiter(max_requests=10, window_seconds=1.0)
 
     caps = ["geo", "timeline", "countries", "whitelist", "bulk_unban"]

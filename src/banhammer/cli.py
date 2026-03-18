@@ -6,6 +6,7 @@ import secrets
 import signal
 import socket
 import sys
+import tempfile
 import textwrap
 import time
 from datetime import datetime, timezone
@@ -13,7 +14,7 @@ from pathlib import Path
 
 import uvicorn
 
-from banhammer.api import create_app
+from banhammer.api import create_app, resolve_server_location
 from banhammer.config import load_config
 from banhammer.db import EventDB
 from banhammer.geo import GeoIPService
@@ -78,7 +79,7 @@ class Agent:
                 **geo_kwargs,
             )
             # Broadcast new event via WebSocket
-            if self.ws_manager.client_count > 0 and self._loop:
+            if self._loop:
                 event_data = {
                     "type": event["type"],
                     "jail": event["jail"],
@@ -98,7 +99,7 @@ class Agent:
                 self.db.save_status(jails)
                 self._last_poll = now
                 # Broadcast status update via WebSocket
-                if self.ws_manager.client_count > 0 and self._loop:
+                if self._loop:
                     asyncio.run_coroutine_threadsafe(
                         self.ws_manager.broadcast("status_update", jails), self._loop
                     )
@@ -132,6 +133,11 @@ class Agent:
         if db_path:
             await asyncio.to_thread(check_and_update, db_path, license_key)
 
+        # Resolve server location in a thread to avoid blocking the event loop
+        server_location = None
+        if self.geo:
+            server_location = await asyncio.to_thread(resolve_server_location, self.geo)
+
         # Create FastAPI app
         app = create_app(
             db=self.db,
@@ -141,6 +147,7 @@ class Agent:
             path_prefix=self.config["api"].get("path_prefix", ""),
             geo_service=self.geo,
             ws_manager=self.ws_manager,
+            server_location=server_location,
         )
 
         # Configure uvicorn
@@ -237,8 +244,17 @@ def cmd_init(args):
         retention_days = 90
     """)
 
-    config_file.write_text(config_content)
-    os.chmod(config_file, 0o600)
+    # Write atomically: set permissions before content to avoid a window
+    # where the file is world-readable (write_text uses umask-derived perms).
+    fd, tmp_path = tempfile.mkstemp(dir=config_dir)
+    try:
+        os.chmod(tmp_path, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(config_content)
+        os.replace(tmp_path, config_file)
+    except Exception:
+        os.unlink(tmp_path)
+        raise
     print(f"Config written to {config_file}")
     print(f"Data directory: {data_dir}")
     print(f"API Key: {api_key}")
