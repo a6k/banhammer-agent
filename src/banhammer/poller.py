@@ -178,7 +178,7 @@ class Poller:
         try:
             # CRIT-3: Use -F for fixed-string matching instead of -i
             result = subprocess.run(
-                ["grep", "-F", ip, path],
+                ["grep", "-F", "--max-count=100", ip, path],
                 capture_output=True, text=True, timeout=10,
             )
             if result.stdout:

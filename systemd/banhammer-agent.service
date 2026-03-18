@@ -15,6 +15,14 @@ ReadWritePaths=/var/lib/banhammer /etc/banhammer
 LockPersonality=yes
 CapabilityBoundingSet=CAP_DAC_READ_SEARCH
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# NOTE: NoNewPrivileges=yes is intentionally absent when use_sudo=true in config.toml
+# (sudo is a setuid binary and requires the ability to gain privileges).
+# If you use use_sudo=false (ACL/group-based log access instead), add:
+# NoNewPrivileges=yes
+# PrivateDevices=yes
+# ProtectKernelTunables=yes
+# ProtectControlGroups=yes
+# CapabilityBoundingSet=
 
 [Install]
 WantedBy=multi-user.target
