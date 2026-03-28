@@ -318,7 +318,7 @@ def create_app(
             raise HTTPException(status_code=422, detail="Invalid IP address format")
         removed = db.whitelist_remove(ip)
         if not removed:
-            raise HTTPException(status_code=404, detail=f"{ip} not in whitelist")
+            raise HTTPException(status_code=404, detail="IP not in whitelist")
         if poller:
             def _apply_whitelist_delete(ip_addr, poller_ref):
                 try:

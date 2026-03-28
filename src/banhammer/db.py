@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 import threading
 import time
@@ -86,6 +87,7 @@ class EventDB:
         city=None,
     ):
         """Insert a ban event with an explicit created_at — for testing only."""
+        assert "PYTEST_CURRENT_TEST" in os.environ, "_insert_with_timestamp is for tests only"
         # Normalize timestamp format: replace +00:00 with Z for consistent SQLite strftime
         if timestamp.endswith("+00:00"):
             timestamp = timestamp[:-6] + "Z"

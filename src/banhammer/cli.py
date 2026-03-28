@@ -244,7 +244,6 @@ def cmd_init(args):
         [agent]
         server_id = "{socket.gethostname()}"
         poll_interval = 60
-        heartbeat_interval = 300
 
         [fail2ban]
         log_path = "/var/log/fail2ban.log"

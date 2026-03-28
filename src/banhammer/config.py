@@ -20,7 +20,6 @@ DEFAULTS = {
     },
     "agent": {
         "poll_interval": 60,
-        "heartbeat_interval": 300,
     },
     "fail2ban": {
         "log_path": "/var/log/fail2ban.log",
@@ -138,7 +137,7 @@ def load_config(path: str) -> dict:
     if not os.path.isabs(db_path):
         raise ValueError(f"storage.db_path must be absolute: {db_path}")
     allowed_db_dirs = ("/var/lib/banhammer/",)
-    if os.environ.get("PYTEST_CURRENT_TEST"):
+    if os.environ.get("PYTEST_CURRENT_TEST") and "pytest" in sys.modules:
         allowed_db_dirs = ("/var/lib/banhammer/", "/tmp/")
     real_parent = os.path.realpath(os.path.dirname(db_path))
     if not any(real_parent.startswith(d.rstrip("/")) for d in allowed_db_dirs):
