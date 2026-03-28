@@ -95,18 +95,17 @@ class Agent:
         if now - self._last_poll >= poll_interval:
             try:
                 jails = self.poller.poll()
-                self.db.save_status(jails)
+                # Strip ip_details before storing and broadcasting — may contain
+                # usernames/password fragments from failed SSH logins (data minimization).
+                safe_jails = {
+                    jail: {k: v for k, v in data.items() if k != "ip_details"}
+                    for jail, data in jails.items()
+                }
+                self.db.save_status(safe_jails)
                 self._last_poll = now
-                # Broadcast status update via WebSocket — strip ip_details to
-                # avoid leaking raw syslog lines (may contain usernames/password
-                # fragments from failed SSH logins) to connected app clients.
                 if self._loop:
-                    broadcast_jails = {
-                        jail: {k: v for k, v in data.items() if k != "ip_details"}
-                        for jail, data in jails.items()
-                    }
                     asyncio.run_coroutine_threadsafe(
-                        self.ws_manager.broadcast("status_update", broadcast_jails), self._loop
+                        self.ws_manager.broadcast("status_update", safe_jails), self._loop
                     )
             except Exception:
                 logger.warning("Polling fail2ban-client failed", exc_info=True)

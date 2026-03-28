@@ -53,7 +53,7 @@ class BulkUnbanEntry(BaseModel):
         try:
             ipaddress.ip_address(v)
         except ValueError:
-            raise ValueError(f"Invalid IP address: {v}")
+            raise ValueError("Invalid IP address format")
         return v
 
     @field_validator("jail")
@@ -77,7 +77,7 @@ class WhitelistRequest(BaseModel):
         try:
             ipaddress.ip_address(v)
         except ValueError:
-            raise ValueError(f"Invalid IP address: {v}")
+            raise ValueError("Invalid IP address format")
         return v
 
 
@@ -91,7 +91,7 @@ class UnbanRequest(BaseModel):
         try:
             ipaddress.ip_address(v)
         except ValueError:
-            raise ValueError(f"Invalid IP address: {v}")
+            raise ValueError("Invalid IP address format")
         return v
 
     @field_validator("jail")
@@ -232,7 +232,6 @@ def create_app(
         latest = db.get_latest_status()
         result = {
             "server_id": server_id,
-            "hostname": server_id,
             "version": _get_version(),
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "jails": latest or {},

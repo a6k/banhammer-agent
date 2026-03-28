@@ -233,7 +233,7 @@ class EventDB:
             with self._connect() as conn:
                 rows = conn.execute(
                     "SELECT jail, COUNT(*) FROM ban_events "
-                    "WHERE type = 'ban' GROUP BY jail"
+                    "WHERE type = 'ban' GROUP BY jail LIMIT 500"
                 ).fetchall()
         return {r[0]: r[1] for r in rows}
 

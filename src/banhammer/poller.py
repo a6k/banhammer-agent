@@ -68,7 +68,7 @@ class Poller:
         """Build command list for fail2ban-client, with optional sudo prefix."""
         cmd = [self.client_path, *args]
         if self.use_sudo:
-            cmd = ["sudo"] + cmd
+            cmd = ["/usr/bin/sudo"] + cmd
         return cmd
 
     def _run(self, *args: str) -> str:
