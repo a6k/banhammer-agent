@@ -390,7 +390,13 @@ def create_app(
     @app.websocket(f"{prefix}/api/v1/ws")
     async def websocket_endpoint(websocket: WebSocket, token: str = ""):
         await websocket.accept()
-        if not token or not hmac.compare_digest(token, api_key):
+        # Prefer Authorization header over query parameter to avoid token in proxy logs
+        auth_header = websocket.headers.get("authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            effective_token = auth_header[7:]
+        else:
+            effective_token = token
+        if not effective_token or not hmac.compare_digest(effective_token, api_key):
             await websocket.close(code=4001, reason="Invalid token")
             return
         if ws_manager is None:

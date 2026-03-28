@@ -109,10 +109,10 @@ The agent serves a REST API on port 8443 (configurable). All endpoints are prefi
 | GET | `/{prefix}/api/v1/whitelist` | API-Key | List whitelisted IPs |
 | POST | `/{prefix}/api/v1/whitelist` | API-Key | Add IP to whitelist (also unbans) |
 | DELETE | `/{prefix}/api/v1/whitelist/{ip}` | API-Key | Remove IP from whitelist |
-| WS | `/{prefix}/api/v1/ws?token=KEY` | Token | WebSocket for real-time events |
+| WS | `/{prefix}/api/v1/ws` | Token | WebSocket for real-time events |
 
 Auth header: `Authorization: Bearer bh_your_api_key`
-WebSocket auth: `?token=bh_your_api_key` (query parameter, since WebSocket doesn't support headers)
+WebSocket auth: `Authorization: Bearer bh_your_api_key` (same header as REST; query parameter `?token=KEY` still accepted for backwards compatibility)
 
 ## Deployment
 
@@ -139,14 +139,6 @@ location /x7k9m2p4q8w1/ {
     proxy_send_timeout 86400;
 }
 
-# IMPORTANT: Use $uri instead of $request_uri in your nginx log format.
-# The WebSocket endpoint authenticates via a ?token= query parameter.
-# $request_uri includes the query string, which would write the API key
-# to /var/log/nginx/access.log in plaintext.
-#
-# In your nginx.conf or site config:
-# log_format banhammer '$remote_addr - [$time_local] "$request_method $uri $server_protocol" $status $body_bytes_sent';
-# access_log /var/log/nginx/access.log banhammer;
 ```
 
 Replace `x7k9m2p4q8w1` with the `path_prefix` from your config. The app URL becomes `https://your-existing-domain.com/x7k9m2p4q8w1`.
