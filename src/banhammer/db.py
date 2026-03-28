@@ -252,7 +252,7 @@ class EventDB:
                     "FROM ban_events "
                     "WHERE type = 'ban' AND country_code IS NOT NULL "
                     "GROUP BY country_code, country_name "
-                    "ORDER BY ban_count DESC"
+                    "ORDER BY ban_count DESC LIMIT 1000"
                 ).fetchall()
         countries = [
             {"country_code": r[0], "country_name": r[1], "ban_count": r[2]}
@@ -317,7 +317,7 @@ class EventDB:
         with self._lock:
             with self._connect() as conn:
                 rows = conn.execute(
-                    "SELECT ip FROM whitelist ORDER BY created_at DESC"
+                    "SELECT ip FROM whitelist ORDER BY created_at DESC LIMIT 10000"
                 ).fetchall()
         return [r[0] for r in rows]
 

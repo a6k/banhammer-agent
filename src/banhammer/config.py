@@ -137,7 +137,9 @@ def load_config(path: str) -> dict:
     db_path = config["storage"]["db_path"]
     if not os.path.isabs(db_path):
         raise ValueError(f"storage.db_path must be absolute: {db_path}")
-    allowed_db_dirs = ("/var/lib/banhammer/", "/tmp/")  # /tmp/ for tests
+    allowed_db_dirs = ("/var/lib/banhammer/",)
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        allowed_db_dirs = ("/var/lib/banhammer/", "/tmp/")
     real_parent = os.path.realpath(os.path.dirname(db_path))
     if not any(real_parent.startswith(d.rstrip("/")) for d in allowed_db_dirs):
         logger.warning("storage.db_path is outside expected directory: %s", db_path)

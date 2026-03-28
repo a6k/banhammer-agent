@@ -129,7 +129,7 @@ class Agent:
     async def run_async(self):
         """Start monitoring loop + FastAPI server concurrently."""
         self.running = True
-        self._loop = asyncio.get_event_loop()
+        self._loop = asyncio.get_running_loop()
 
         # Auto-update GeoLite2 DB if needed
         geo_config = self.config.get("geo", {})
@@ -138,9 +138,11 @@ class Agent:
         if db_path:
             await asyncio.to_thread(check_and_update, db_path, license_key)
 
-        # Resolve server location in a thread to avoid blocking the event loop
+        # Resolve server location in a thread to avoid blocking the event loop.
+        # Only run if a GeoLite2 reader is actually loaded — avoids an outbound
+        # request to api.ipify.org when no geo backend is configured.
         server_location = None
-        if self.geo:
+        if self.geo and self.geo._reader is not None:
             server_location = await asyncio.to_thread(resolve_server_location, self.geo)
 
         # Create FastAPI app
@@ -176,7 +178,7 @@ class Agent:
         server = uvicorn.Server(uvicorn_config)
 
         # Handle shutdown signals
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         for sig in (signal.SIGTERM, signal.SIGINT):
             loop.add_signal_handler(sig, lambda s=server: self._shutdown(s))
 

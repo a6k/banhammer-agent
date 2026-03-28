@@ -91,11 +91,16 @@ def download_geodb(license_key: str, db_path: str) -> bool:
                         tar.extract(member, path=dest_dir, filter="data")
                         extracted = os.path.join(dest_dir, member.name)
 
+                        real_extracted = os.path.realpath(extracted)
+                        real_dest_dir = os.path.realpath(dest_dir)
+                        if not real_extracted.startswith(real_dest_dir + os.sep):
+                            raise ValueError(f"Extracted path escapes destination: {extracted}")
+
                         if os.path.exists(db_path):
                             shutil.copy2(db_path, db_path + ".bak")
                             os.chmod(db_path + ".bak", 0o600)
 
-                        shutil.move(extracted, db_path)
+                        shutil.move(real_extracted, db_path)
                         os.chmod(db_path, 0o600)
                         break
         finally:

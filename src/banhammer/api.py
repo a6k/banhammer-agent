@@ -270,7 +270,8 @@ def create_app(
 
     @app.get(f"{prefix}/api/v1/whitelist")
     async def whitelist_list_endpoint(_=Depends(verify_api_key)):
-        return {"ips": db.whitelist_list()}
+        ips = await asyncio.to_thread(db.whitelist_list)
+        return {"ips": ips}
 
     @app.post(f"{prefix}/api/v1/whitelist")
     async def whitelist_add_endpoint(req: WhitelistRequest, _=Depends(verify_api_key)):
@@ -314,7 +315,7 @@ def create_app(
         try:
             ipaddress.ip_address(ip)
         except ValueError:
-            raise HTTPException(status_code=422, detail=f"Invalid IP address: {ip}")
+            raise HTTPException(status_code=422, detail="Invalid IP address format")
         removed = db.whitelist_remove(ip)
         if not removed:
             raise HTTPException(status_code=404, detail=f"{ip} not in whitelist")
@@ -344,7 +345,7 @@ def create_app(
 
     @app.get(f"{prefix}/api/v1/stats/countries")
     async def countries(_=Depends(verify_api_key)):
-        return db.countries_stats()
+        return await asyncio.to_thread(db.countries_stats)
 
     @app.get(f"{prefix}/api/v1/stats/timeline")
     async def timeline(
