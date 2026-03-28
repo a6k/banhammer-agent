@@ -155,11 +155,13 @@ def _do_bulk_unban(entries, poller_ref):
                 capture_output=True, text=True, timeout=10,
             )
             if result.returncode != 0:
+                logger.warning("Bulk unban failed for %s in %s (rc=%d)", entry.ip, entry.jail, result.returncode)
                 results.append({"ip": entry.ip, "jail": entry.jail,
                                 "success": False, "error": "unban failed"})
             else:
                 results.append({"ip": entry.ip, "jail": entry.jail, "success": True})
-        except Exception:
+        except Exception as e:
+            logger.warning("Bulk unban error for %s in %s: %s", entry.ip, entry.jail, type(e).__name__)
             results.append({"ip": entry.ip, "jail": entry.jail,
                             "success": False, "error": "command error"})
     return results

@@ -218,8 +218,8 @@ def cmd_init(args):
         print(f"Config already exists: {config_file}")
         return
 
-    config_dir.mkdir(parents=True, exist_ok=True)
-    data_dir.mkdir(parents=True, exist_ok=True)
+    config_dir.mkdir(mode=0o750, parents=True, exist_ok=True)
+    data_dir.mkdir(mode=0o750, parents=True, exist_ok=True)
 
     api_key = "bh_" + secrets.token_hex(16)
     path_prefix = "/" + secrets.token_hex(6)

@@ -2,6 +2,7 @@ import ipaddress
 import os
 import re
 import subprocess
+from datetime import datetime, timedelta, timezone
 
 ALLOWED_LOG_DIRS = ("/var/log/",)
 
@@ -190,8 +191,9 @@ class Poller:
 
     def _grep_journal(self, match_parts: list[str], ip: str, max_lines: int) -> list[str]:
         try:
+            since = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
             cmd = ["journalctl", "--no-pager", "-n", "500", "--output", "short-iso",
-                   "--since", "24 hours ago", "--"]
+                   "--since", since, "--"]
             for part in match_parts:
                 cmd.append(part)
             result = subprocess.run(

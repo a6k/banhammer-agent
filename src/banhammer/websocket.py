@@ -21,13 +21,13 @@ class WebSocketManager:
                 await ws.close(code=4008, reason="Too many connections")
                 return
             self._clients.append(ws)
-        logger.info("WebSocket client connected (%d total)", len(self._clients))
+        logger.debug("WebSocket client connected (%d total)", len(self._clients))
 
     async def disconnect(self, ws: WebSocket):
         async with self._lock:
             if ws in self._clients:
                 self._clients.remove(ws)
-        logger.info("WebSocket client disconnected (%d remaining)", len(self._clients))
+        logger.debug("WebSocket client disconnected (%d remaining)", len(self._clients))
 
     async def broadcast(self, message_type: str, data: dict):
         payload = json.dumps({"type": message_type, "data": data})

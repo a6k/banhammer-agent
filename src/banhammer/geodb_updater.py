@@ -35,8 +35,9 @@ def _fetch_expected_sha256(license_key: str) -> str | None:
         resp.raise_for_status()
         # Format: "<hexdigest>  <filename>"
         return resp.text.strip().split()[0]
-    except Exception:
-        logger.warning("Could not fetch GeoLite2 SHA256 checksum — skipping verification")
+    except Exception as e:
+        # Avoid logging the exception message — it may contain the URL with license_key
+        logger.warning("Could not fetch GeoLite2 SHA256 checksum (%s) — skipping verification", type(e).__name__)
         return None
 
 
