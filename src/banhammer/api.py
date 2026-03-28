@@ -396,6 +396,11 @@ def create_app(
             effective_token = auth_header[7:]
         else:
             effective_token = token
+            if token:
+                logger.warning(
+                    "WebSocket token via query parameter is deprecated and will be removed "
+                    "in a future version — use Authorization: Bearer header instead"
+                )
         if not effective_token or not hmac.compare_digest(effective_token, api_key):
             await websocket.close(code=4001, reason="Invalid token")
             return

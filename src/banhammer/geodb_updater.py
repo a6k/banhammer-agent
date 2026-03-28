@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import logging
 import os
 import shutil
@@ -21,10 +23,30 @@ def db_age_days(db_path: str) -> float | None:
     return (time.time() - p.stat().st_mtime) / 86400
 
 
+def _fetch_expected_sha256(license_key: str) -> str | None:
+    """Download the SHA256 checksum file from MaxMind and return the hex digest."""
+    try:
+        resp = httpx.get(
+            MAXMIND_URL,
+            params={"edition_id": EDITION, "license_key": license_key, "suffix": "tar.gz.sha256"},
+            timeout=30.0,
+            follow_redirects=True,
+        )
+        resp.raise_for_status()
+        # Format: "<hexdigest>  <filename>"
+        return resp.text.strip().split()[0]
+    except Exception:
+        logger.warning("Could not fetch GeoLite2 SHA256 checksum — skipping verification")
+        return None
+
+
 def download_geodb(license_key: str, db_path: str) -> bool:
     try:
         logger.info("Downloading GeoLite2-City database...")
         dest_dir = os.path.dirname(db_path)
+
+        expected_sha256 = _fetch_expected_sha256(license_key)
+
         tmp_fd, tmp_path = tempfile.mkstemp(dir=dest_dir, suffix=".tar.gz")
         try:
             _MAX_DOWNLOAD_BYTES = 200 * 1024 * 1024  # 200 MB hard cap
@@ -32,6 +54,7 @@ def download_geodb(license_key: str, db_path: str) -> bool:
             # Close the raw fd first so we can reopen via path; avoids fd
             # leak if the httpx.stream context raises before fdopen.
             os.close(tmp_fd)
+            sha256 = hashlib.sha256()
             with httpx.stream(
                 "GET",
                 MAXMIND_URL,
@@ -51,7 +74,14 @@ def download_geodb(license_key: str, db_path: str) -> bool:
                             raise ValueError(
                                 f"GeoLite2 download exceeded {_MAX_DOWNLOAD_BYTES // (1024*1024)} MB limit"
                             )
+                        sha256.update(chunk)
                         f.write(chunk)
+
+            if expected_sha256 is not None:
+                actual = sha256.hexdigest()
+                if not hmac.compare_digest(actual, expected_sha256):
+                    raise ValueError("GeoLite2 SHA256 mismatch — download may be corrupt or tampered")
+                logger.info("GeoLite2 SHA256 verified")
 
             with tarfile.open(tmp_path, "r:gz") as tar:
                 for member in tar.getmembers():
