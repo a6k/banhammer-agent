@@ -284,7 +284,7 @@ retention_days = 90         # Auto-delete old events
 
 ## Security
 
-The agent has been through 9 security audits. Key hardening:
+The agent has been through 10 security audits. Key hardening:
 
 - Runs as dedicated `banhammer` user (not root)
 - API key with constant-time comparison (`hmac.compare_digest`)
@@ -298,6 +298,7 @@ The agent has been through 9 security audits. Key hardening:
 - GeoIP HTTP fallback is opt-in with security warning
 - WebSocket token via `Authorization: Bearer` header, constant-time comparison
 - GeoLite2 download integrity verified via SHA256 checksum
+- WebSocket status broadcasts strip raw syslog lines (data minimization)
 - Dependencies pinned with hashes in `requirements.lock`
 
 ## Requirements
