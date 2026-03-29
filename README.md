@@ -283,7 +283,7 @@ retention_days = 90         # Auto-delete old events
 
 ## Security
 
-The agent has been through 14 security audits; the macOS/iOS app through 31. Key hardening:
+The agent has been through 14 security audits; the macOS/iOS app through 32. Key hardening:
 
 - Runs as dedicated `banhammer` user (not root)
 - API key with constant-time comparison (`hmac.compare_digest`)
