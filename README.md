@@ -1,6 +1,6 @@
 # BanHammer Agent
 
-Lightweight server agent that monitors Fail2Ban activity and serves a local REST API. Connects directly to the [BanHammer](https://github.com/a6k) macOS/iOS app — no central server required. Your data stays on your server.
+Lightweight server agent that monitors Fail2Ban activity and serves a local REST API. Connects directly to the BanHammer macOS/iOS app — no central server required. Your data stays on your server.
 
 ## How it works
 
@@ -10,9 +10,9 @@ Lightweight server agent that monitors Fail2Ban activity and serves a local REST
         ├── Monitors Fail2Ban logs and jails
         ├── Stores events in local SQLite database
         ├── Enriches IPs with geo-location data
-        └── Serves HTTPS API for the BanHammer app
+        └── Serves HTTPS API + WebSocket for the BanHammer app
               ↑
-[BanHammer App] ← connects directly
+[BanHammer macOS / iOS App] ← connects directly, no cloud relay
 ```
 
 ## Quick Start
@@ -80,7 +80,7 @@ sudo banhammer-agent run
 
 ### 5. Connect the app
 
-Open the BanHammer app, add your server with the URL (including path prefix) and API key from step 2.
+Open the BanHammer app (macOS or iOS), add your server with the URL (including path prefix) and API key from step 2. The app is available for macOS, iPhone, and iPad — all sharing the same SwiftUI codebase.
 
 ## Features
 
@@ -283,7 +283,7 @@ retention_days = 90         # Auto-delete old events
 
 ## Security
 
-The agent has been through 14 security audits. Key hardening:
+The agent has been through 14 security audits; the macOS/iOS app through 30. Key hardening:
 
 - Runs as dedicated `banhammer` user (not root)
 - API key with constant-time comparison (`hmac.compare_digest`)
