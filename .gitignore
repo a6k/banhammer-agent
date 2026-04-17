@@ -5,7 +5,8 @@ __pycache__/
 dist/
 build/
 *.db
-docs/
+docs/*
+!docs/privacy/
 .pytest_cache/
 .ruff_cache/
 *.log
