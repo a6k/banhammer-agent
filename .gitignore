@@ -7,6 +7,7 @@ build/
 *.db
 docs/*
 !docs/index.html
+!docs/icon.png
 !docs/privacy/
 .pytest_cache/
 .ruff_cache/
