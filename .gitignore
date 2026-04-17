@@ -6,6 +6,7 @@ dist/
 build/
 *.db
 docs/*
+!docs/index.html
 !docs/privacy/
 .pytest_cache/
 .ruff_cache/
