@@ -60,7 +60,7 @@ class BulkUnbanEntry(BaseModel):
     @classmethod
     def validate_jail(cls, v: str) -> str:
         if not v or not JAIL_RE.match(v):
-            raise ValueError(f"Invalid jail name: {v!r}")
+            raise ValueError("Invalid jail name format")
         return v
 
 
@@ -98,7 +98,7 @@ class UnbanRequest(BaseModel):
     @classmethod
     def validate_jail(cls, v: str) -> str:
         if not v or not JAIL_RE.match(v):
-            raise ValueError(f"Invalid jail name: {v!r} — must match ^[a-zA-Z0-9_-]+$")
+            raise ValueError("Invalid jail name format")
         return v
 
 

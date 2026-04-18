@@ -9,6 +9,7 @@ docs/*
 !docs/index.html
 !docs/icon.png
 !docs/privacy/
+!docs/audits/
 .pytest_cache/
 .ruff_cache/
 *.log
